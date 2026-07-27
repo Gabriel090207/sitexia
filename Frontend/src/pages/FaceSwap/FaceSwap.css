@@ -1,0 +1,910 @@
+.face-swap{
+
+    width:100%;
+
+    min-height:100vh;
+
+    padding:140px 70px 80px;
+
+}
+
+.face-swap-container{
+
+    width:100%;
+
+    max-width:1400px;
+
+    margin:0 auto;
+
+}
+
+/* =====================================
+   HEADER
+===================================== */
+
+.face-swap-header{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    text-align:center;
+
+    max-width:1100px;
+
+    margin:0 auto 60px;
+
+}
+
+/* =====================================
+   TITLE
+===================================== */
+
+.face-swap-title{
+
+    color:var(--text-primary);
+
+    font-size:64px;
+
+    font-weight:700;
+
+    line-height:1.05;
+
+}
+
+.face-swap-title span{
+
+    display:inline-block;
+
+    background:linear-gradient(
+        180deg,
+        #ff5b5b 0%,
+        #ff3030 35%,
+        #d10d0d 100%
+    );
+
+    -webkit-background-clip:text;
+
+    -webkit-text-fill-color:transparent;
+
+    background-clip:text;
+
+}
+
+/* =====================================
+   DESCRIPTION
+===================================== */
+
+.face-swap-description{
+
+    margin-top:24px;
+
+    max-width:700px;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    line-height:1.9;
+
+}
+
+/* =====================================
+   LAYOUT
+===================================== */
+
+.face-swap-layout{
+
+    display:grid;
+
+    grid-template-columns:1fr 320px;
+
+    gap:30px;
+
+    align-items:start;
+
+}
+
+/* =====================================
+   WORKSPACE
+===================================== */
+
+.face-swap-workspace{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:25px;
+
+}
+
+/* =====================================
+   SIDEBAR
+===================================== */
+
+.face-swap-sidebar{
+
+
+
+    top:110px;
+
+}
+
+/* =====================================
+   CARDS
+===================================== */
+
+.face-swap-upload-card,
+.face-swap-create-card,
+.face-swap-faces-card,
+.face-swap-sidebar-card{
+
+    background:var(--background-card);
+
+    border:1px solid var(--border-color);
+
+    border-radius:var(--radius-large);
+
+    transition:.25s;
+
+}
+
+.face-swap-upload-card:hover,
+.face-swap-create-card:hover,
+.face-swap-faces-card:hover,
+.face-swap-sidebar-card:hover{
+
+    border-color:rgba(255,32,32,.18);
+
+    box-shadow:
+        0 0 0 1px rgba(255,32,32,.05),
+        0 25px 60px rgba(0,0,0,.35);
+
+}
+
+/* =====================================
+   PLACEHOLDERS
+===================================== */
+
+.face-swap-upload-card{
+
+    min-height:470px;
+
+}
+
+.face-swap-create-card{
+
+    min-height:120px;
+
+}
+
+.face-swap-faces-card{
+
+    min-height:260px;
+
+}
+
+.face-swap-sidebar-card{
+
+    min-height:880px;
+
+}
+
+
+/* =====================================
+   UPLOAD
+===================================== */
+
+.face-swap-upload-card{
+
+    padding:30px;
+
+}
+
+.face-swap-upload-dropzone{
+
+    width:100%;
+
+    min-height:420px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    text-align:center;
+
+    padding:60px;
+
+    border:2px dashed rgba(255,32,32,.25);
+
+    border-radius:22px;
+
+    transition:.25s;
+
+}
+
+.face-swap-upload-dropzone:hover{
+
+    border-color:rgba(255,32,32,.55);
+
+    background:rgba(255,32,32,.025);
+
+}
+
+.face-swap-upload-icon{
+
+    width:88px;
+
+    height:88px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    border-radius:22px;
+
+    background:rgba(255,32,32,.08);
+
+    border:1px solid rgba(255,32,32,.15);
+
+    color:var(--primary);
+
+}
+
+.face-swap-upload-title{
+
+    margin-top:30px;
+
+    color:var(--text-primary);
+
+    font-size:30px;
+
+    font-weight:600;
+
+}
+
+.face-swap-upload-description{
+
+    margin-top:18px;
+
+    max-width:520px;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    line-height:1.8;
+
+}
+
+.face-swap-upload-formats{
+
+    margin-top:20px;
+
+    color:#7d7d7d;
+
+    font-size:14px;
+
+    letter-spacing:.3px;
+
+}
+
+.face-swap-upload-button{
+
+    margin-top:36px;
+
+    height:56px;
+
+    padding:0 34px;
+
+    border-radius:14px;
+
+    background:var(--primary);
+
+    color:#fff;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    transition:.25s;
+
+}
+
+.face-swap-upload-button:hover{
+
+    background:var(--primary-hover);
+
+    transform:translateY(-2px);
+
+}
+
+
+/* =====================================
+   CHOOSE FACE
+===================================== */
+
+.face-swap-faces-card{
+
+    padding:30px;
+
+}
+
+.face-swap-faces-header{
+
+    margin-bottom:28px;
+
+}
+
+.face-swap-faces-title{
+
+    color:var(--text-primary);
+
+    font-size:28px;
+
+    font-weight:600;
+
+}
+
+.face-swap-faces-description{
+
+    margin-top:14px;
+
+    max-width:700px;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    line-height:1.8;
+
+}
+
+.face-swap-faces-list{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:18px;
+
+}
+
+.face-swap-add-face{
+
+    width:170px;
+
+    height:170px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:18px;
+
+    background:#171717;
+
+    border:2px dashed rgba(255,32,32,.20);
+
+    border-radius:22px;
+
+    transition:.25s;
+
+}
+
+.face-swap-add-face:hover{
+
+    border-color:rgba(255,32,32,.55);
+
+    background:rgba(255,32,32,.05);
+
+    transform:translateY(-3px);
+
+}
+
+.face-swap-add-face-icon{
+
+    width:72px;
+
+    height:72px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    border-radius:18px;
+
+    background:rgba(255,32,32,.08);
+
+    border:1px solid rgba(255,32,32,.18);
+
+    color:var(--primary);
+
+}
+
+.face-swap-add-face-text{
+
+    color:var(--text-primary);
+
+    font-size:15px;
+
+    font-weight:600;
+
+}
+
+/* =====================================
+   CREATE BUTTON
+===================================== */
+
+.face-swap-create-card{
+
+    padding:24px;
+
+}
+
+.face-swap-create-button{
+
+    width:100%;
+
+    height:62px;
+
+    border-radius:16px;
+
+    background:var(--primary);
+
+    color:#fff;
+
+    font-size:16px;
+
+    font-weight:600;
+
+    transition:.25s;
+
+}
+
+.face-swap-create-button:hover{
+
+    background:var(--primary-hover);
+
+    transform:translateY(-2px);
+
+}
+
+
+
+
+/* =====================================
+   LIBRARY
+===================================== */
+
+.face-swap-sidebar-card{
+
+    padding:28px;
+
+}
+
+.face-swap-library-title{
+
+    font-size:26px;
+
+    font-weight:600;
+
+    color:var(--text-primary);
+
+}
+
+.face-swap-library-description{
+
+    margin-top:12px;
+
+    color:var(--text-secondary);
+
+    font-size:14px;
+
+    line-height:1.7;
+
+}
+
+.face-swap-library-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(2,1fr);
+
+    gap:14px;
+
+    margin-top:28px;
+
+}
+
+.face-swap-library-item{
+
+    aspect-ratio:1;
+
+    border-radius:16px;
+
+    background:#181818;
+
+    border:1px solid rgba(255,255,255,.05);
+
+    transition:.25s;
+
+}
+
+.face-swap-library-item:hover{
+
+    border-color:rgba(255,32,32,.35);
+
+    transform:translateY(-2px);
+
+}
+
+.face-swap-library-upload{
+
+    width:100%;
+
+    height:56px;
+
+    margin-top:24px;
+
+    border-radius:14px;
+
+    background:rgba(255,32,32,.08);
+
+    border:1px solid rgba(255,32,32,.18);
+
+    color:var(--primary);
+
+    font-size:15px;
+
+    font-weight:600;
+
+    transition:.25s;
+
+}
+
+.face-swap-library-upload:hover{
+
+    background:rgba(255,32,32,.12);
+
+    border-color:rgba(255,32,32,.35);
+
+}
+
+
+
+/* =====================================
+   RESPONSIVO
+===================================== */
+
+@media (max-width:992px){
+
+    .face-swap{
+
+        padding:120px 40px 70px;
+
+    }
+
+    .face-swap-title{
+
+        font-size:52px;
+
+    }
+
+    .face-swap-layout{
+
+        grid-template-columns:1fr;
+
+    }
+
+    .face-swap-sidebar{
+
+        position:static;
+
+    }
+
+    .face-swap-sidebar-card{
+
+        min-height:auto;
+
+    }
+
+}
+
+/* ===================================== */
+
+@media (max-width:768px){
+
+    .face-swap{
+
+        padding:110px 20px 60px;
+
+    }
+
+    .face-swap-header{
+
+        margin-bottom:40px;
+
+    }
+
+    .face-swap-title{
+
+        font-size:40px;
+
+        line-height:1.1;
+
+    }
+
+    .face-swap-description{
+
+        margin-top:18px;
+
+        font-size:14px;
+
+        line-height:1.8;
+
+    }
+
+    .face-swap-layout{
+
+        gap:22px;
+
+    }
+
+    .face-swap-workspace{
+
+        gap:20px;
+
+    }
+
+    .face-swap-upload-card,
+    .face-swap-faces-card,
+    .face-swap-create-card,
+    .face-swap-sidebar-card{
+
+        padding:22px;
+
+    }
+
+    .face-swap-upload-dropzone{
+
+        min-height:340px;
+
+        padding:35px 25px;
+
+    }
+
+    .face-swap-upload-icon{
+
+        width:72px;
+        height:72px;
+
+        border-radius:18px;
+
+    }
+
+    .face-swap-upload-title{
+
+        margin-top:24px;
+
+        font-size:24px;
+
+    }
+
+    .face-swap-upload-description{
+
+        font-size:14px;
+
+    }
+
+    .face-swap-upload-button{
+
+        width:100%;
+
+    }
+
+    .face-swap-faces-title{
+
+        font-size:24px;
+
+    }
+
+    .face-swap-faces-description{
+
+        font-size:14px;
+
+    }
+
+    .face-swap-faces-list{
+
+        justify-content:center;
+
+    }
+
+    .face-swap-add-face{
+
+        width:150px;
+
+        height:150px;
+
+    }
+
+    .face-swap-create-button{
+
+        height:56px;
+
+    }
+
+    .face-swap-library-title{
+
+        font-size:22px;
+
+    }
+
+    .face-swap-library-description{
+
+        font-size:13px;
+
+    }
+
+    .face-swap-library-grid{
+
+        gap:12px;
+
+    }
+
+}
+
+/* ===================================== */
+
+@media (max-width:340px){
+
+    .face-swap{
+
+        padding:100px 15px 50px;
+
+    }
+
+    .face-swap-title{
+
+        font-size:32px;
+
+    }
+
+    .face-swap-description{
+
+        font-size:13px;
+
+    }
+
+    .face-swap-upload-card,
+    .face-swap-faces-card,
+    .face-swap-create-card,
+    .face-swap-sidebar-card{
+
+        padding:18px;
+
+    }
+
+    .face-swap-upload-dropzone{
+
+        min-height:300px;
+
+        padding:25px 18px;
+
+    }
+
+    .face-swap-upload-icon{
+
+        width:64px;
+
+        height:64px;
+
+    }
+
+    .face-swap-upload-title{
+
+        font-size:22px;
+
+    }
+
+    .face-swap-upload-description{
+
+        font-size:13px;
+
+    }
+
+    .face-swap-upload-formats{
+
+        font-size:12px;
+
+    }
+
+    .face-swap-upload-button{
+
+        height:52px;
+
+        font-size:14px;
+
+    }
+
+    .face-swap-faces-title{
+
+        font-size:22px;
+
+    }
+
+    .face-swap-faces-description{
+
+        font-size:13px;
+
+    }
+
+    .face-swap-add-face{
+
+        width:100%;
+
+        height:140px;
+
+    }
+
+    .face-swap-add-face-icon{
+
+        width:64px;
+
+        height:64px;
+
+    }
+
+    .face-swap-add-face-text{
+
+        font-size:14px;
+
+    }
+
+    .face-swap-create-button{
+
+        height:52px;
+
+        font-size:14px;
+
+    }
+
+    .face-swap-library-title{
+
+        font-size:20px;
+
+    }
+
+    .face-swap-library-grid{
+
+        gap:10px;
+
+    }
+
+    .face-swap-library-upload{
+
+        height:52px;
+
+        font-size:14px;
+
+    }
+
+}

@@ -1,0 +1,17 @@
+# Ambiente virtual
+venv/
+
+# Credenciais
+credentials/
+
+# Variáveis de ambiente
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# macOS
+.DS_Store

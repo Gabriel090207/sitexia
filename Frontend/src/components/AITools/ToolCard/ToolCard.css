@@ -1,0 +1,142 @@
+.tool-card {
+
+    width: 100%;
+    min-height: 320px;
+
+    display: flex;
+    flex-direction: column;
+
+    padding: 38px;
+
+    background: #090909;
+
+    border: 1px solid rgba(255,255,255,.05);
+    border-radius: 24px;
+
+    text-decoration: none;
+
+    transition: .3s ease;
+
+}
+
+.tool-card:hover {
+
+    transform: translateY(-6px);
+
+    border-color: rgba(255,40,40,.25);
+
+    background: #0c0c0c;
+
+}
+
+/* =====================================
+   ICON
+===================================== */
+
+.tool-card-icon {
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 62px;
+    height: 62px;
+
+    border-radius: 16px;
+
+    background: rgba(255,30,30,.08);
+
+    border: 1px solid rgba(255,30,30,.18);
+
+    color: var(--primary);
+
+    transition: .3s ease;
+
+}
+
+.tool-card:hover .tool-card-icon{
+
+    transform: scale(1.05);
+
+    background: rgba(255,30,30,.12);
+
+}
+
+/* =====================================
+   TITLE
+===================================== */
+
+.tool-card-title{
+
+    margin-top:32px;
+
+    color:var(--text-primary);
+
+    font-size: 20px;
+
+    font-weight:600;
+
+    line-height:1.2;
+
+}
+
+/* =====================================
+   DESCRIPTION
+===================================== */
+
+.tool-card-description{
+
+    margin-top:16px;
+
+    color:var(--text-secondary);
+
+    font-size:13px;
+
+    line-height:1.8;
+
+}
+
+/* =====================================
+   FOOTER
+===================================== */
+
+.tool-card-footer{
+
+    display:flex;
+    align-items:center;
+
+    gap:10px;
+
+    margin-top:auto;
+
+    padding-top:40px;
+
+}
+
+/* =====================================
+   LINK
+===================================== */
+
+.tool-card-link-text{
+
+    color:var(--primary);
+
+    font-size:17px;
+
+    font-weight:600;
+
+}
+
+.tool-card-link-icon{
+
+    color:var(--primary);
+
+    transition:.3s ease;
+
+}
+
+.tool-card:hover .tool-card-link-icon{
+
+    transform:translateX(6px);
+
+}

@@ -1,0 +1,754 @@
+.video-generation{
+
+    width:100%;
+
+    min-height:100vh;
+
+    padding:140px 70px 80px;
+
+}
+
+.video-generation-container{
+
+    width:100%;
+
+    max-width:1340px;
+
+    margin:0 auto;
+
+}
+
+/* =====================================
+   HEADER
+===================================== */
+
+.video-generation-header{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    text-align:center;
+
+    margin-bottom:60px;
+
+}
+
+.video-generation-title{
+
+    font-size:64px;
+
+    font-weight:700;
+
+    color:var(--text-primary);
+
+    line-height:1.05;
+
+}
+
+.video-generation-title span{
+
+    background:linear-gradient(
+        180deg,
+        #ff5b5b,
+        #ff3030,
+        #d10d0d
+    );
+
+    -webkit-background-clip:text;
+
+    -webkit-text-fill-color:transparent;
+
+    background-clip:text;
+
+}
+
+.video-generation-description{
+
+    margin-top:24px;
+
+    max-width:700px;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    line-height:1.9;
+
+}
+
+/* =====================================
+   CARD
+===================================== */
+
+.video-generation-card{
+
+    background:var(--background-card);
+
+    border:1px solid var(--border-color);
+
+    border-radius:var(--radius-large);
+
+    padding:35px;
+
+}
+
+/* =====================================
+   MODES
+===================================== */
+
+.video-generation-modes{
+
+    display:grid;
+
+    grid-template-columns:repeat(4,1fr);
+
+    gap:18px;
+
+    margin-bottom:35px;
+
+}
+
+.video-generation-mode{
+
+    width:100%;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:10px;
+
+    height:58px;
+
+    padding:0 18px;
+
+    border-radius:16px;
+
+    background:#222;
+
+    border:1px solid transparent;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    font-weight:600;
+
+    transition:.25s;
+
+}
+
+.video-generation-mode svg{
+
+    flex-shrink:0;
+
+}
+
+.video-generation-mode:hover{
+
+    color:#fff;
+
+    border-color:rgba(255,32,32,.25);
+
+    background:#272727;
+
+}
+
+.video-generation-mode-active{
+
+    background:rgba(255,32,32,.10);
+
+    border-color:rgba(255,32,32,.30);
+
+    color:#fff;
+
+}
+
+.video-generation-mode small{
+
+    padding:4px 8px;
+
+    border-radius:999px;
+
+    background:var(--primary);
+
+    color:#fff;
+
+    font-size:10px;
+
+    font-weight:700;
+
+    text-transform:uppercase;
+
+    letter-spacing:.4px;
+
+}
+
+/* =====================================
+   PLACEHOLDERS
+===================================== */
+
+.video-generation-upload{
+
+    min-height:340px;
+
+    margin-bottom:30px;
+
+    padding:30px;
+
+    border-radius:22px;
+
+    background:#171717;
+
+    border:2px dashed rgba(255,32,32,.18);
+
+    transition:.25s;
+
+}
+
+.video-generation-upload:hover{
+
+    border-color:rgba(255,32,32,.45);
+
+    background:rgba(255,32,32,.02);
+
+}
+
+.video-generation-upload-content{
+
+    min-height: 420px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    text-align:center;
+
+}
+
+.video-generation-upload-icon{
+
+    width:86px;
+
+    height:86px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    border-radius:22px;
+
+    background:rgba(255,32,32,.08);
+
+    border:1px solid rgba(255,32,32,.18);
+
+    color:var(--primary);
+
+}
+
+.video-generation-upload-title{
+
+    margin-top:28px;
+
+    color:var(--text-primary);
+
+    font-size:28px;
+
+    font-weight:600;
+
+}
+
+.video-generation-upload-description{
+
+    margin-top:16px;
+
+    max-width: 620px;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    line-height:1.8;
+
+}
+
+.video-generation-upload-formats{
+
+    margin-top:18px;
+
+    color:#7c7c7c;
+
+    font-size:14px;
+
+}
+
+.video-generation-upload-button{
+
+    margin-top:34px;
+
+    height:56px;
+
+    padding:0 34px;
+
+    border-radius:14px;
+
+    background:var(--primary);
+
+    color:#fff;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    transition:.25s;
+
+}
+
+.video-generation-upload-button:hover{
+
+    background:var(--primary-hover);
+
+    transform:translateY(-2px);
+
+}
+
+
+.video-generation-prompt{
+
+    margin-bottom:0px;
+
+    padding:28px;
+
+    border-radius:18px;
+
+    background:#171717;
+
+    border:1px solid var(--border-color);
+
+}
+
+.video-generation-prompt-title{
+
+    color:var(--text-primary);
+
+    font-size:24px;
+
+    font-weight:600;
+
+}
+
+.video-generation-prompt-description{
+
+    margin-top:12px;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    line-height:1.8;
+
+}
+
+.video-generation-prompt-textarea{
+
+    width:100%;
+
+    min-height:180px;
+
+    margin-top:24px;
+
+    padding:18px 20px;
+
+    resize:none;
+
+    border-radius:16px;
+
+    background:#111;
+
+    border:1px solid var(--border-color);
+
+    color:var(--text-primary);
+
+    font-size:15px;
+
+    line-height:1.8;
+
+    transition:.25s;
+
+}
+
+.video-generation-prompt-textarea::placeholder{
+
+    color:#6f6f6f;
+
+}
+
+.video-generation-prompt-textarea:focus{
+
+    border-color:rgba(255,32,32,.35);
+
+    box-shadow:0 0 0 4px rgba(255,32,32,.08);
+
+}
+
+
+/* =====================================
+   BUTTON
+===================================== */
+
+.video-generation-button{
+
+    width:100%;
+    margin-top: 30px;
+
+    height:60px;
+
+    border-radius:16px;
+
+    background:var(--primary);
+
+    color:#fff;
+
+    font-size:16px;
+
+    font-weight:600;
+
+    transition:.25s;
+
+}
+
+.video-generation-button:hover{
+
+    background:var(--primary-hover);
+
+    transform:translateY(-2px);
+
+}
+
+
+/* =====================================
+   RESPONSIVO
+===================================== */
+
+@media (max-width:992px){
+
+    .video-generation{
+
+        padding:120px 40px 70px;
+
+    }
+
+    .video-generation-title{
+
+        font-size:52px;
+
+    }
+
+    .video-generation-card{
+
+        padding:30px;
+
+    }
+
+    .video-generation-modes{
+
+        grid-template-columns:repeat(2,1fr);
+
+    }
+
+}
+
+/* ===================================== */
+
+@media (max-width:768px){
+
+    .video-generation{
+
+        padding:110px 20px 60px;
+
+    }
+
+    .video-generation-header{
+
+        margin-bottom:40px;
+
+    }
+
+    .video-generation-title{
+
+        font-size:40px;
+
+        line-height:1.1;
+
+    }
+
+    .video-generation-description{
+
+        margin-top:18px;
+
+        font-size:14px;
+
+        line-height:1.8;
+
+    }
+
+    .video-generation-card{
+
+        padding:22px;
+
+    }
+
+    .video-generation-modes{
+
+        grid-template-columns:1fr;
+
+        gap:14px;
+
+    }
+
+    .video-generation-mode{
+
+        height:54px;
+
+        font-size:14px;
+
+    }
+
+    .video-generation-upload{
+
+        padding:24px;
+
+    }
+
+    .video-generation-upload-content{
+
+        min-height:320px;
+
+    }
+
+    .video-generation-upload-icon{
+
+        width:72px;
+
+        height:72px;
+
+        border-radius:18px;
+
+    }
+
+    .video-generation-upload-title{
+
+        margin-top:22px;
+
+        font-size:24px;
+
+    }
+
+    .video-generation-upload-description{
+
+        font-size:14px;
+
+    }
+
+    .video-generation-upload-button{
+
+        width:100%;
+
+    }
+
+    .video-generation-prompt{
+
+        padding:22px;
+
+    }
+
+    .video-generation-prompt-title{
+
+        font-size:22px;
+
+    }
+
+    .video-generation-prompt-description{
+
+        font-size:14px;
+
+    }
+
+    .video-generation-prompt-textarea{
+
+        min-height:160px;
+
+        font-size:14px;
+
+    }
+
+    .video-generation-button{
+
+        height:56px;
+
+        font-size:15px;
+
+    }
+
+}
+
+/* ===================================== */
+
+@media (max-width:340px){
+
+    .video-generation{
+
+        padding:100px 15px 50px;
+
+    }
+
+    .video-generation-title{
+
+        font-size:32px;
+
+    }
+
+    .video-generation-description{
+
+        font-size:13px;
+
+    }
+
+    .video-generation-card{
+
+        padding:18px;
+
+    }
+
+    .video-generation-modes{
+
+        gap:10px;
+
+    }
+
+    .video-generation-mode{
+
+        height:50px;
+
+        padding:0 14px;
+
+        gap:8px;
+
+        font-size:13px;
+
+    }
+
+    .video-generation-mode svg{
+
+        width:18px;
+
+        height:18px;
+
+    }
+
+    .video-generation-mode small{
+
+        font-size:9px;
+
+        padding:3px 6px;
+
+    }
+
+    .video-generation-upload{
+
+        padding:18px;
+
+    }
+
+    .video-generation-upload-content{
+
+        min-height:280px;
+
+    }
+
+    .video-generation-upload-icon{
+
+        width:64px;
+
+        height:64px;
+
+    }
+
+    .video-generation-upload-title{
+
+        font-size:21px;
+
+    }
+
+    .video-generation-upload-description{
+
+        font-size:13px;
+
+    }
+
+    .video-generation-upload-formats{
+
+        font-size:12px;
+
+    }
+
+    .video-generation-upload-button{
+
+        width:100%;
+
+        height:52px;
+
+        font-size:14px;
+
+    }
+
+    .video-generation-prompt{
+
+        padding:18px;
+
+    }
+
+    .video-generation-prompt-title{
+
+        font-size:20px;
+
+    }
+
+    .video-generation-prompt-description{
+
+        font-size:13px;
+
+    }
+
+    .video-generation-prompt-textarea{
+
+        min-height:140px;
+
+        padding:16px;
+
+        font-size:13px;
+
+    }
+
+    .video-generation-button{
+
+        height:52px;
+
+        margin-top:24px;
+
+        font-size:14px;
+
+    }
+
+}
