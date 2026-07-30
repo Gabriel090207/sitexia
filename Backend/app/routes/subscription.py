@@ -49,8 +49,7 @@ def create_subscription(
             "card_token_id":
                 data.token,
 
-            "back_url":
-                "http://localhost:5173",
+            "back_url": "https://xiaswap.netlify.app",
 
             "auto_recurring": {
 
