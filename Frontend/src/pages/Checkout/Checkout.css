@@ -521,36 +521,73 @@
     word-break: break-word;
 }
 
-
 /* =====================================
-   CREATE ACCOUNT MODAL
+   CREATE ACCOUNT PAGE
 ===================================== */
 
-.checkout-modal-overlay{
+.checkout-account-page{
 
-    position:fixed;
+    width:100%;
 
-    inset:0;
+    max-width:560px;
 
-    background:rgba(0,0,0,.75);
+    margin:60px auto;
 
-    backdrop-filter:blur(8px);
+    padding:48px;
+
+    background:#111111;
+
+    border:1px solid #2a2a2a;
+
+    border-radius:24px;
 
     display:flex;
 
+    flex-direction:column;
+
     align-items:center;
 
-    justify-content:center;
+    text-align:center;
 
-    z-index:999;
+    gap:24px;
 
-    padding:20px;
+    box-shadow:
+        0 20px 60px rgba(0,0,0,.45);
 
 }
 
-.checkout-create-account{
 
-    max-width:560px;
+.checkout-account-page h2{
+
+    margin:0;
+
+    font-size:2rem;
+
+    font-weight:700;
+
+    color:#ffffff;
+
+}
+
+
+.checkout-account-page p{
+
+    margin:0;
+
+    color:#bdbdbd;
+
+    line-height:1.7;
+
+    max-width:420px;
+
+}
+
+
+.checkout-account-page .checkout-field{
+
+    width:100%;
+
+    text-align:left;
 
 }
 
@@ -565,7 +602,7 @@
 
     background:#ff2b2b;
 
-    color:#fff;
+    color:white;
 
     display:flex;
 
@@ -606,17 +643,15 @@
 
     border:none;
 
-    color:#999;
+    color:#888;
+
+    cursor:pointer;
 
     display:flex;
 
     align-items:center;
 
     justify-content:center;
-
-    cursor:pointer;
-
-    transition:.25s;
 
 }
 

@@ -296,7 +296,7 @@ if (checkoutStep === "create-account") {
 
         <main className="checkout">
 
-            <div className="checkout-loading checkout-create-account">
+            <div className="checkout-account-page">
 
                 <div className="checkout-account-icon">
 
