@@ -3,7 +3,20 @@ import { useState } from "react";
 
 import { useLocation } from "react-router-dom";
 
-import { createSubscription } from "../../api/subscription";
+import {
+    createSubscription,
+    linkSubscription
+} from "../../api/subscription";
+
+import {
+    createUserWithEmailAndPassword,
+} from "firebase/auth";
+
+import { FirebaseError } from "firebase/app";
+
+import auth from "../../firebase/auth";
+
+import { createUserDocument } from "../../firebase/users";
 
 export default function Checkout() {
 
@@ -25,15 +38,33 @@ const [cardExpiry, setCardExpiry] = useState("");
 
 const [cardCvv, setCardCvv] = useState("");
 
+const [password, setPassword] = useState("");
+
+const [confirmPassword, setConfirmPassword] = useState("");
+
+const [passwordError, setPasswordError] = useState("");
+
+const [confirmPasswordError, setConfirmPasswordError] = useState("");
+
+const [creatingAccount, setCreatingAccount] = useState(false);
+
+const [subscriptionResponse, setSubscriptionResponse] =
+    useState<any>(null);
+
 const mp = new window.MercadoPago(
     import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY
 );
 
 const [checkoutStep, setCheckoutStep] = useState<
-    "checkout" | "loading" | "success" | "create-account" | "error"
+    | "checkout"
+    | "loading"
+    | "create-account"
+    | "success"
+    | "error"
 >("checkout");
 
-const [subscriptionResponse, setSubscriptionResponse] = useState<any>(null);
+
+const [userExists, setUserExists] = useState<boolean | null>(null);
 
 async function generateCardToken() {
 
@@ -82,12 +113,27 @@ async function generateCardToken() {
 
             card_holder: cardHolder,
 
+            plan_id: plan.id,
+
+            plan_name: plan.name,
+
+            credits: plan.credits,
+
         });
 
         setSubscriptionResponse(response);
 
+        setUserExists(response.user_exists);
 
-        setCheckoutStep("success");
+        if (response.user_exists) {
+
+            setCheckoutStep("success");
+
+        } else {
+
+            setCheckoutStep("create-account");
+
+        }
 
     } catch (error) {
 
@@ -212,11 +258,17 @@ if (checkoutStep === "success") {
 
                 </p>
 
-                <pre>
+               <p>
 
-                    {JSON.stringify(subscriptionResponse, null, 2)}
+                    E-mail: <strong>{email}</strong>
 
-                </pre>
+                </p>
+
+                <p>
+
+                    Usuário existente: {String(userExists)}
+
+                </p>
 
                 <button
                     className="checkout-submit-button"
@@ -234,6 +286,99 @@ if (checkoutStep === "success") {
 
 }
 
+const showCreateAccountModal =
+    checkoutStep === "create-account";
+
+
+async function handleCreateAccount() {
+
+    setPasswordError("");
+    setConfirmPasswordError("");
+
+    if (password.length < 6) {
+
+        setPasswordError(
+            "A senha deve conter pelo menos 6 caracteres."
+        );
+
+        return;
+
+    }
+
+    if (password !== confirmPassword) {
+
+        setConfirmPasswordError(
+            "As senhas não coincidem."
+        );
+
+        return;
+
+    }
+
+    try {
+
+        setCreatingAccount(true);
+
+        const userCredential =
+            await createUserWithEmailAndPassword(
+                auth,
+                email,
+                password
+            );
+
+        await createUserDocument(
+            userCredential.user
+        );
+
+
+        await linkSubscription({
+
+            firebase_uid:
+                userCredential.user.uid,
+
+            email,
+
+            subscription_id:
+                subscriptionResponse.subscription_id
+
+        });
+
+
+        setCheckoutStep("success");
+
+    } catch (error) {
+
+        const authError = error as FirebaseError;
+
+        switch (authError.code) {
+
+            case "auth/email-already-in-use":
+
+                setPasswordError(
+                    "Este e-mail já possui uma conta."
+                );
+
+                break;
+
+            default:
+
+                setPasswordError(
+                    "Não foi possível criar a conta."
+                );
+
+                console.error(authError);
+
+                break;
+
+        }
+
+    } finally {
+
+        setCreatingAccount(false);
+
+    }
+
+}
 
     return (
 
@@ -481,6 +626,103 @@ if (checkoutStep === "success") {
                 </section>
 
             </div>
+
+
+            {showCreateAccountModal && (
+
+                <div className="checkout-modal-overlay">
+
+                    <div className="checkout-modal">
+
+                        <h2>
+
+                            Crie sua senha
+
+                        </h2>
+
+                        <p>
+
+                            Seu pagamento foi aprovado.
+                            Agora só falta criar uma senha para acessar sua conta.
+
+                        </p>
+
+                        <div className="checkout-field">
+
+                            <label>Senha</label>
+
+                            <input
+                                type="password"
+                                placeholder="Digite sua senha"
+                                value={password}
+                                onChange={(e) => {
+
+                                    setPassword(e.target.value);
+
+                                    setPasswordError("");
+
+                                }}
+                            />
+
+                        </div>
+
+                        {passwordError && (
+
+                            <p className="checkout-error-message">
+
+                                {passwordError}
+
+                            </p>
+
+                        )}
+
+                        <div className="checkout-field">
+
+                            <label>Confirmar senha</label>
+
+                            <input
+                                type="password"
+                                placeholder="Confirme sua senha"
+                                value={confirmPassword}
+                                onChange={(e) => {
+
+                                    setConfirmPassword(e.target.value);
+
+                                    setConfirmPasswordError("");
+
+                                }}
+                            />
+
+                        </div>
+
+
+                        {confirmPasswordError && (
+
+                            <p className="checkout-error-message">
+
+                                {confirmPasswordError}
+
+                            </p>
+
+                        )}
+
+                        <button
+                            className="checkout-submit-button"
+                            onClick={handleCreateAccount}
+                            disabled={creatingAccount}
+                        >
+
+                            {creatingAccount
+                                ? "Criando conta..."
+                                : "Criar conta"}
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+            )}
 
         </main>
 

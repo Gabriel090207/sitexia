@@ -14,6 +14,12 @@ export interface CreateSubscriptionRequest {
 
     card_holder: string;
 
+    plan_id: string;
+
+    plan_name: string;
+
+    credits: number;
+
 }
 
 export async function createSubscription(
@@ -22,6 +28,31 @@ export async function createSubscription(
 
     const response = await api.post(
         "/subscription/create-subscription",
+        data
+    );
+
+    return response.data;
+
+}
+
+
+export interface LinkSubscriptionRequest {
+
+    firebase_uid: string;
+
+    email: string;
+
+    subscription_id: string;
+
+}
+
+
+export async function linkSubscription(
+    data: LinkSubscriptionRequest
+) {
+
+    const response = await api.post(
+        "/subscription/link-user",
         data
     );
 
