@@ -7,6 +7,12 @@ import {
 } from "react-router-dom";
 
 import {
+    Eye,
+    EyeOff,
+    LockKeyhole
+} from "lucide-react";
+
+import {
     createSubscription,
     linkSubscription
 } from "../../api/subscription";
@@ -47,6 +53,10 @@ const [cardCvv, setCardCvv] = useState("");
 const [password, setPassword] = useState("");
 
 const [confirmPassword, setConfirmPassword] = useState("");
+
+const [showPassword, setShowPassword] = useState(false);
+
+const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
 const [passwordError, setPasswordError] = useState("");
 
@@ -280,9 +290,176 @@ if (checkoutStep === "success") {
 
 }
 
-const showCreateAccountModal =
-    checkoutStep === "create-account";
+if (checkoutStep === "create-account") {
 
+    return (
+
+        <main className="checkout">
+
+            <div className="checkout-loading checkout-create-account">
+
+                <div className="checkout-account-icon">
+
+                    <LockKeyhole size={38}/>
+
+                </div>
+
+
+                <h2>
+                    Crie sua senha
+                </h2>
+
+
+                <p>
+
+                    Seu pagamento foi aprovado.
+                    Agora falta apenas criar sua senha para finalizar sua conta Xia.
+
+                </p>
+
+
+                <div className="checkout-field">
+
+                    <label>
+                        Senha
+                    </label>
+
+
+                    <div className="checkout-password-wrapper">
+
+                        <input
+                            type={
+                                showPassword
+                                ? "text"
+                                : "password"
+                            }
+                            placeholder="Digite sua senha"
+                            value={password}
+                            onChange={(e)=>{
+
+                                setPassword(e.target.value);
+
+                                setPasswordError("");
+
+                            }}
+                        />
+
+
+                        <button
+                            type="button"
+                            className="checkout-eye-button"
+                            onClick={()=>setShowPassword(!showPassword)}
+                        >
+
+                            {
+                                showPassword
+                                ?
+                                <EyeOff size={20}/>
+                                :
+                                <Eye size={20}/>
+                            }
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                {passwordError && (
+
+                    <p className="checkout-error-message">
+                        {passwordError}
+                    </p>
+
+                )}
+
+
+
+                <div className="checkout-field">
+
+                    <label>
+                        Confirmar senha
+                    </label>
+
+
+                    <div className="checkout-password-wrapper">
+
+                        <input
+                            type={
+                                showConfirmPassword
+                                ?
+                                "text"
+                                :
+                                "password"
+                            }
+                            placeholder="Confirme sua senha"
+                            value={confirmPassword}
+                            onChange={(e)=>{
+
+                                setConfirmPassword(e.target.value);
+
+                                setConfirmPasswordError("");
+
+                            }}
+                        />
+
+
+                        <button
+                            type="button"
+                            className="checkout-eye-button"
+                            onClick={()=>setShowConfirmPassword(!showConfirmPassword)}
+                        >
+
+                            {
+                                showConfirmPassword
+                                ?
+                                <EyeOff size={20}/>
+                                :
+                                <Eye size={20}/>
+                            }
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                {confirmPasswordError && (
+
+                    <p className="checkout-error-message">
+                        {confirmPasswordError}
+                    </p>
+
+                )}
+
+
+
+                <button
+                    className="checkout-submit-button"
+                    onClick={handleCreateAccount}
+                    disabled={creatingAccount}
+                >
+
+                    {
+                        creatingAccount
+                        ?
+                        "Criando conta..."
+                        :
+                        "Criar conta"
+                    }
+
+                </button>
+
+
+            </div>
+
+        </main>
+
+    );
+
+}
 
 async function handleCreateAccount() {
 
@@ -622,101 +799,7 @@ async function handleCreateAccount() {
             </div>
 
 
-            {showCreateAccountModal && (
-
-                <div className="checkout-modal-overlay">
-
-                    <div className="checkout-modal">
-
-                        <h2>
-
-                            Crie sua senha
-
-                        </h2>
-
-                        <p>
-
-                            Seu pagamento foi aprovado.
-                            Agora só falta criar uma senha para acessar sua conta.
-
-                        </p>
-
-                        <div className="checkout-field">
-
-                            <label>Senha</label>
-
-                            <input
-                                type="password"
-                                placeholder="Digite sua senha"
-                                value={password}
-                                onChange={(e) => {
-
-                                    setPassword(e.target.value);
-
-                                    setPasswordError("");
-
-                                }}
-                            />
-
-                        </div>
-
-                        {passwordError && (
-
-                            <p className="checkout-error-message">
-
-                                {passwordError}
-
-                            </p>
-
-                        )}
-
-                        <div className="checkout-field">
-
-                            <label>Confirmar senha</label>
-
-                            <input
-                                type="password"
-                                placeholder="Confirme sua senha"
-                                value={confirmPassword}
-                                onChange={(e) => {
-
-                                    setConfirmPassword(e.target.value);
-
-                                    setConfirmPasswordError("");
-
-                                }}
-                            />
-
-                        </div>
-
-
-                        {confirmPasswordError && (
-
-                            <p className="checkout-error-message">
-
-                                {confirmPasswordError}
-
-                            </p>
-
-                        )}
-
-                        <button
-                            className="checkout-submit-button"
-                            onClick={handleCreateAccount}
-                            disabled={creatingAccount}
-                        >
-
-                            {creatingAccount
-                                ? "Criando conta..."
-                                : "Criar conta"}
-
-                        </button>
-
-                    </div>
-
-                </div>
-
-            )}
+           
 
         </main>
 
