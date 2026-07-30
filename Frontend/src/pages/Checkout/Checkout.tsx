@@ -29,7 +29,15 @@ const mp = new window.MercadoPago(
     import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY
 );
 
+const [checkoutStep, setCheckoutStep] = useState<
+    "checkout" | "loading" | "success" | "create-account" | "error"
+>("checkout");
+
+const [subscriptionResponse, setSubscriptionResponse] = useState<any>(null);
+
 async function generateCardToken() {
+
+    setCheckoutStep("loading");
 
     try {
 
@@ -60,7 +68,7 @@ async function generateCardToken() {
 
         });
 
-        await createSubscription({
+        const response = await createSubscription({
 
             user_id: "",
 
@@ -76,9 +84,16 @@ async function generateCardToken() {
 
         });
 
+        setSubscriptionResponse(response);
+
+
+        setCheckoutStep("success");
+
     } catch (error) {
 
         console.error(error);
+
+        setCheckoutStep("error");
 
     }
 
@@ -111,6 +126,114 @@ function formatCardHolder(value: string) {
         .trimStart();
 
 }
+
+if (checkoutStep === "loading") {
+
+    return (
+
+        <main className="checkout">
+
+            <div className="checkout-loading">
+
+                <div className="checkout-loading-spinner" />
+
+                <h2>Processando assinatura...</h2>
+
+                <p>
+
+                    Estamos processando seu pagamento.
+
+                    Não feche esta página.
+
+                </p>
+
+            </div>
+
+        </main>
+
+    );
+
+}
+
+if (checkoutStep === "error") {
+
+    return (
+
+        <main className="checkout">
+
+            <div className="checkout-error">
+
+                <h2>
+
+                    Não foi possível concluir sua assinatura
+
+                </h2>
+
+                <p>
+
+                    Ocorreu um erro durante o processamento do pagamento.
+
+                </p>
+
+                <button
+                    className="checkout-submit-button"
+                    onClick={() => setCheckoutStep("checkout")}
+                >
+
+                    Tentar novamente
+
+                </button>
+
+            </div>
+
+        </main>
+
+    );
+
+}
+
+if (checkoutStep === "success") {
+
+    return (
+
+        <main className="checkout">
+
+            <div className="checkout-success">
+
+                <h2>
+
+                    Assinatura ativada!
+
+                </h2>
+
+                <p>
+
+                    Seu pagamento foi aprovado com sucesso.
+
+                </p>
+
+                <pre>
+
+                    {JSON.stringify(subscriptionResponse, null, 2)}
+
+                </pre>
+
+                <button
+                    className="checkout-submit-button"
+                >
+
+                    Continuar
+
+                </button>
+
+            </div>
+
+        </main>
+
+    );
+
+}
+
 
     return (
 
