@@ -6,6 +6,7 @@ import firebase_admin
 from dotenv import load_dotenv
 from firebase_admin import credentials
 from firebase_admin import storage
+from firebase_admin import firestore
 
 
 load_dotenv()
@@ -46,3 +47,4 @@ if not firebase_admin._apps:
 
 
 bucket = storage.bucket()
+db = firestore.client()

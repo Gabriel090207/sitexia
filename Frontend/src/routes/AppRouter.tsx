@@ -6,7 +6,10 @@ import Home from "../pages/Home/Home";
 import FaceSwap from "../pages/FaceSwap/FaceSwap";
 import VideoGeneration from "../pages/VideoGeneration/VideoGeneration";
 import ImageGeneration from "../pages/ImageGeneration/ImageGeneration";
+
 import Pricing from "../pages/Pricing/Pricing";
+import Checkout from "../pages/Checkout/Checkout";
+
 import Login from "../pages/Login/Login";
 
 import Profile from "../pages/Profile/Profile";
@@ -43,6 +46,13 @@ function AppRouter() {
                 <Route
                     path="/pricing"
                     element={<Pricing />}
+                />
+
+
+
+                <Route
+                    path="/checkout"
+                    element={<Checkout />}
                 />
 
 

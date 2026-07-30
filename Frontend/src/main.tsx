@@ -8,6 +8,8 @@ import { AuthProvider } from "./contexts/AuthContext";
 
 import "./styles/global.css";
 
+import "./types/mercadopago";
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
         <BrowserRouter>

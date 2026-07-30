@@ -2,7 +2,11 @@ import "./Pricing.css";
 
 import { Star } from "lucide-react";
 
+import { useNavigate } from "react-router-dom";
+
 const Pricing = () => {
+
+    const navigate = useNavigate();
 
     return (
 
@@ -34,7 +38,7 @@ const Pricing = () => {
                         </span>
 
                         <h2 className="pricing-price">
-                            R$ 129,90
+                            R$ 1,00
                         </h2>
 
                         <p className="pricing-credits">
@@ -53,10 +57,22 @@ const Pricing = () => {
 
                         </ul>
 
-                        <button className="pricing-button">
-
+                        <button
+                            className="pricing-button"
+                            onClick={() =>
+                                navigate("/checkout", {
+                                    state: {
+                                        plan: {
+                                            id: "starter",
+                                            name: "Starter",
+                                            price: 1.00,
+                                            credits: 12,
+                                        },
+                                    },
+                                })
+                            }
+                        >
                             Comprar Agora
-
                         </button>
 
                     </div>
@@ -105,10 +121,22 @@ const Pricing = () => {
 
                         </ul>
 
-                        <button className="pricing-button">
-
+                        <button
+                            className="pricing-button"
+                            onClick={() =>
+                                navigate("/checkout", {
+                                    state: {
+                                        plan: {
+                                            id: "pro",
+                                            name: "Pro",
+                                            price: 599.90,
+                                            credits: 80,
+                                        },
+                                    },
+                                })
+                            }
+                        >
                             Comprar Agora
-
                         </button>
 
                     </div>
@@ -149,10 +177,22 @@ const Pricing = () => {
 
                         </ul>
 
-                        <button className="pricing-button">
-
+                        <button
+                            className="pricing-button"
+                            onClick={() =>
+                                navigate("/checkout", {
+                                    state: {
+                                        plan: {
+                                            id: "enterprise",
+                                            name: "Enterprise",
+                                            price: 2599.90,
+                                            credits: 350,
+                                        },
+                                    },
+                                })
+                            }
+                        >
                             Comprar Agora
-
                         </button>
 
                     </div>
