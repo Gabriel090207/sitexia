@@ -1,7 +1,10 @@
 import "./Checkout.css";
 import { useState } from "react";
 
-import { useLocation } from "react-router-dom";
+import {
+    useLocation,
+    useNavigate
+} from "react-router-dom";
 
 import {
     createSubscription,
@@ -10,6 +13,7 @@ import {
 
 import {
     createUserWithEmailAndPassword,
+    signInWithCustomToken,
 } from "firebase/auth";
 
 import { FirebaseError } from "firebase/app";
@@ -21,6 +25,8 @@ import { createUserDocument } from "../../firebase/users";
 export default function Checkout() {
 
 const location = useLocation();
+
+const navigate = useNavigate();
 
 const plan = location.state?.plan;
 
@@ -62,9 +68,6 @@ const [checkoutStep, setCheckoutStep] = useState<
     | "success"
     | "error"
 >("checkout");
-
-
-const [userExists, setUserExists] = useState<boolean | null>(null);
 
 async function generateCardToken() {
 
@@ -123,9 +126,13 @@ async function generateCardToken() {
 
         setSubscriptionResponse(response);
 
-        setUserExists(response.user_exists);
 
         if (response.user_exists) {
+
+            await signInWithCustomToken(
+                auth,
+                response.custom_token
+            );
 
             setCheckoutStep("success");
 
@@ -258,24 +265,11 @@ if (checkoutStep === "success") {
 
                 </p>
 
-               <p>
-
-                    E-mail: <strong>{email}</strong>
-
-                </p>
-
-                <p>
-
-                    Usuário existente: {String(userExists)}
-
-                </p>
-
                 <button
                     className="checkout-submit-button"
+                    onClick={() => navigate("/")}
                 >
-
-                    Continuar
-
+                    Voltar para o início
                 </button>
 
             </div>
@@ -729,3 +723,5 @@ async function handleCreateAccount() {
     );
 
 }
+
+

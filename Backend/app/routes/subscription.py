@@ -109,16 +109,25 @@ def create_subscription(data: SubscriptionPayment):
 
         })
 
+        custom_token = None
+
         try:
 
             firebase_user = auth.get_user_by_email(data.email)
 
             user_exists = True
+
             firebase_uid = firebase_user.uid
+
+            custom_token = auth.create_custom_token(
+                firebase_uid
+            ).decode()
+
 
         except auth.UserNotFoundError:
 
             user_exists = False
+
             firebase_uid = None
 
 
@@ -180,9 +189,13 @@ def create_subscription(data: SubscriptionPayment):
 
             "subscription": mp_response,
 
+            "subscription_id": subscription_id,
+
             "user_exists": user_exists,
 
             "firebase_uid": firebase_uid,
+
+            "custom_token": custom_token,
 
             "email": data.email
 
