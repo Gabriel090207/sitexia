@@ -50,6 +50,12 @@ interface UserData {
 
     credits: number;
 
+    subscription_status?: string;
+
+    subscription_next_payment?: string;
+
+    active_subscription?: string;
+
 }
 
 export default function Profile() {

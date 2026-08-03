@@ -79,6 +79,8 @@ def create_subscription(data: SubscriptionPayment):
 
         }
 
+        print(mp_response)
+
         mp_response = subscription_sdk.preapproval().create(
             subscription_data
         )
@@ -300,3 +302,14 @@ def link_user_subscription(
             "error": str(e)
 
         }
+
+@router.post("/webhook")
+async def mercado_pago_webhook(payload: dict):
+
+    print("========== WEBHOOK RECEBIDO ==========")
+    print(payload)
+    print("======================================")
+
+    return {
+        "success": True
+    }
