@@ -79,11 +79,11 @@ def create_subscription(data: SubscriptionPayment):
 
         }
 
-        print(mp_response)
-
         mp_response = subscription_sdk.preapproval().create(
             subscription_data
         )
+
+         print(mp_response)
 
         subscription = mp_response["response"]
 
