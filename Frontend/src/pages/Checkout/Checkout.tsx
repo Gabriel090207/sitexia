@@ -502,6 +502,8 @@ async function handleCreateAccount() {
         );
 
 
+        console.log(subscriptionResponse);
+
         await linkSubscription({
 
             firebase_uid:
