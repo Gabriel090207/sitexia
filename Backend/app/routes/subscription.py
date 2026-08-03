@@ -42,6 +42,109 @@ class LinkSubscriptionRequest(BaseModel):
 
     subscription_id: str
 
+
+class CancelSubscriptionRequest(BaseModel):
+
+    subscription_id: str
+
+
+def sync_subscription_data(
+    subscription_id: str,
+    subscription: dict,
+    extra_data: dict | None = None
+):
+
+    data = {
+
+        "mercado_pago_id": subscription_id,
+
+        "status": subscription.get("status"),
+
+        "payer_id": subscription.get("payer_id"),
+
+        "payment_method_id":
+            subscription.get("payment_method_id"),
+
+        "date_created":
+            subscription.get("date_created"),
+
+        "last_modified":
+            subscription.get("last_modified"),
+
+        "next_payment_date":
+            subscription.get("next_payment_date"),
+
+    }
+
+    if extra_data:
+
+        data.update(extra_data)
+
+    db.collection("subscriptions").document(
+        subscription_id
+    ).set(
+        data,
+        merge=True
+    )
+
+
+def sync_user_subscription(
+    firebase_uid: str,
+    subscription_id: str,
+    subscription: dict
+):
+
+    user_ref = (
+        db.collection("users")
+        .document(firebase_uid)
+    )
+
+    user_ref.set({
+
+        "plan":
+            subscription.get("plan_name"),
+
+        "credits":
+            subscription.get("credits"),
+
+        "subscription_status":
+            subscription.get("status"),
+
+        "active_subscription":
+            subscription_id,
+
+        "subscription_plan_id":
+            subscription.get("plan_id"),
+
+        "subscription_amount":
+            subscription.get("amount"),
+
+        "subscription_next_payment":
+            subscription.get("next_payment_date"),
+
+        "subscription_payment_method":
+            subscription.get("payment_method_id"),
+
+        "subscription_created_at":
+            subscription.get("date_created"),
+
+        "subscription_last_modified":
+            subscription.get("last_modified"),
+
+        "subscription_payer_id":
+            subscription.get("payer_id"),
+
+    }, merge=True)
+
+
+def get_subscription(subscription_id: str):
+
+    response = subscription_sdk.preapproval().get(
+        subscription_id
+    )
+
+    return response["response"]
+
 @router.get("/ping")
 def ping():
 
@@ -83,8 +186,6 @@ def create_subscription(data: SubscriptionPayment):
             subscription_data
         )
 
-        print(mp_response)
-
         subscription = mp_response["response"]
 
         subscription_id = subscription["id"]
@@ -106,6 +207,16 @@ def create_subscription(data: SubscriptionPayment):
             "amount": data.amount,
 
             "status": subscription.get("status"),
+
+            "payer_id": subscription.get("payer_id"),
+
+            "payment_method_id": subscription.get("payment_method_id"),
+
+            "date_created": subscription.get("date_created"),
+
+            "last_modified": subscription.get("last_modified"),
+
+            "next_payment_date": subscription.get("next_payment_date"),
 
             "created_at": firestore.SERVER_TIMESTAMP
 
@@ -150,7 +261,28 @@ def create_subscription(data: SubscriptionPayment):
                     subscription.get("status"),
 
                 "active_subscription":
-                    subscription_id
+                    subscription_id,
+
+                "subscription_plan_id":
+                    data.plan_id,
+
+                "subscription_amount":
+                    data.amount,
+
+                "subscription_next_payment":
+                    subscription.get("next_payment_date"),
+
+                "subscription_payment_method":
+                    subscription.get("payment_method_id"),
+
+                "subscription_created_at":
+                    subscription.get("date_created"),
+
+                "subscription_last_modified":
+                    subscription.get("last_modified"),
+
+                "subscription_payer_id":
+                    subscription.get("payer_id")
 
             })
 
@@ -263,7 +395,28 @@ def link_user_subscription(
                 data.subscription_id,
 
             "subscription_status":
-                subscription["status"]
+                subscription["status"],
+
+            "subscription_plan_id":
+                subscription["plan_id"],
+
+            "subscription_amount":
+                subscription["amount"],
+
+            "subscription_next_payment":
+                subscription.get("next_payment_date"),
+
+            "subscription_payment_method":
+                subscription.get("payment_method_id"),
+
+            "subscription_created_at":
+                subscription.get("date_created"),
+
+            "subscription_last_modified":
+                subscription.get("last_modified"),
+
+            "subscription_payer_id":
+                subscription.get("payer_id")
 
         })
 
@@ -306,10 +459,159 @@ def link_user_subscription(
 @router.post("/webhook")
 async def mercado_pago_webhook(payload: dict):
 
-    print("========== WEBHOOK RECEBIDO ==========")
-    print(payload)
-    print("======================================")
+    try:
 
-    return {
-        "success": True
-    }
+        print("========== WEBHOOK RECEBIDO ==========")
+        print(payload)
+        print("======================================")
+
+        subscription_id = (
+            payload.get("data", {})
+            .get("id")
+        )
+
+        if not subscription_id:
+
+            return {
+                "success": True
+            }
+
+        subscription = get_subscription(
+            subscription_id
+        )
+
+        sync_subscription_data(
+            subscription_id,
+            subscription
+        )
+
+        subscription_doc = (
+            db.collection("subscriptions")
+            .document(subscription_id)
+            .get()
+        )
+
+        if subscription_doc.exists:
+
+            subscription_data = subscription_doc.to_dict()
+
+            firebase_uid = subscription_data.get(
+                "firebase_uid"
+            )
+
+            if firebase_uid:
+
+                sync_user_subscription(
+                    firebase_uid,
+                    subscription_id,
+                    subscription_data
+                )
+
+        return {
+            "success": True
+        }
+
+    except Exception as e:
+
+        print(e)
+
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@router.post("/cancel")
+def cancel_subscription(
+    data: CancelSubscriptionRequest
+):
+
+    try:
+
+        response = subscription_sdk.preapproval().update(
+
+            data.subscription_id,
+
+            {
+                "status": "cancelled"
+            }
+
+        )
+
+        subscription = response["response"]
+
+        sync_subscription_data(
+
+            data.subscription_id,
+
+            subscription
+
+        )
+
+
+        subscription_doc = (
+
+            db.collection("subscriptions")
+
+            .document(data.subscription_id)
+
+            .get()
+
+        )
+
+        if subscription_doc.exists:
+
+            subscription_data = subscription_doc.to_dict()
+
+            firebase_uid = subscription_data.get(
+                "firebase_uid"
+            )
+
+
+            if firebase_uid:
+
+                db.collection("users").document(
+                    firebase_uid
+                ).update({
+
+                    "plan": "free",
+
+                    "credits": 0,
+
+                    "subscription_status": "cancelled",
+
+                    "active_subscription": None,
+
+                    "subscription_plan_id": None,
+
+                    "subscription_amount": None,
+
+                    "subscription_next_payment": None,
+
+                    "subscription_payment_method": None,
+
+                    "subscription_created_at": None,
+
+                    "subscription_last_modified": None,
+
+                    "subscription_payer_id": None
+
+                })
+
+        return {
+
+            "success": True,
+
+            "mercado_pago": response
+
+        }
+
+    except Exception as e:
+
+        return {
+
+            "success": False,
+
+            "error": str(e)
+
+        }
