@@ -198,8 +198,6 @@ def create_subscription(data: SubscriptionPayment):
 
             "email": data.email,
 
-            "firebase_uid": firebase_uid,
-
             "plan_id": data.plan_id,
 
             "plan_name": data.plan_name,
@@ -253,6 +251,17 @@ def create_subscription(data: SubscriptionPayment):
             user_ref = db.collection(
                 "users"
             ).document(firebase_uid)
+
+
+            db.collection("subscriptions").document(
+                subscription_id
+            ).update({
+
+                "firebase_uid": firebase_uid,
+
+                "linked": True
+
+            })
 
 
             user_ref.update({
