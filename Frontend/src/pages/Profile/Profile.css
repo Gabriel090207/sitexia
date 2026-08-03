@@ -794,6 +794,14 @@
 
     }
 
+    .profile-modal-actions button{
+
+        flex:none;
+
+        width:100%;
+
+    }
+
     /* Toast */
 
     .profile-toast{

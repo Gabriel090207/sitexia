@@ -198,6 +198,8 @@ def create_subscription(data: SubscriptionPayment):
 
             "email": data.email,
 
+            "firebase_uid": firebase_uid,
+
             "plan_id": data.plan_id,
 
             "plan_name": data.plan_name,
@@ -217,6 +219,8 @@ def create_subscription(data: SubscriptionPayment):
             "last_modified": subscription.get("last_modified"),
 
             "next_payment_date": subscription.get("next_payment_date"),
+
+            "last_credit_date": None,
 
             "created_at": firestore.SERVER_TIMESTAMP
 
@@ -562,6 +566,14 @@ def cancel_subscription(
         if subscription_doc.exists:
 
             subscription_data = subscription_doc.to_dict()
+
+            last_credit_date = subscription_data.get(
+                "last_credit_date"
+            )
+
+            next_payment_date = subscription.get(
+                "next_payment_date"
+            )
 
             firebase_uid = subscription_data.get(
                 "firebase_uid"

@@ -59,3 +59,27 @@ export async function linkSubscription(
     return response.data;
 
 }
+
+export interface CancelSubscriptionRequest {
+
+    subscription_id: string;
+
+}
+
+export async function cancelSubscription(
+
+    data: CancelSubscriptionRequest
+
+) {
+
+    const response = await api.post(
+
+        "/subscription/cancel",
+
+        data
+
+    );
+
+    return response.data;
+
+}
