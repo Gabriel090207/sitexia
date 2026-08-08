@@ -24,6 +24,75 @@ const getNavLinkClass = ({ isActive }: { isActive: boolean }) =>
         ? "header-navigation-link header-navigation-link-active"
         : "header-navigation-link";
 
+
+function ProtectedNavLink({
+
+    to,
+
+    children,
+
+    user,
+
+}:{
+
+    to:string;
+
+    children:React.ReactNode;
+
+    user:any;
+
+}){
+
+    if(user){
+
+        return(
+
+            <NavLink
+                to={to}
+                className={getNavLinkClass}
+            >
+
+                {children}
+
+            </NavLink>
+
+        );
+
+    }
+
+    return(
+
+        <div className="header-protected-link">
+
+            <span className="header-navigation-link">
+
+                {children}
+
+            </span>
+
+            <div className="header-protected-tooltip">
+
+                <strong>
+
+                    Faça login
+
+                </strong>
+
+                <p>
+
+                    Crie sua conta para acessar esta ferramenta.
+
+                </p>
+
+            </div>
+
+        </div>
+
+    );
+
+}
+
+
 function Header() {
 
     const {
@@ -139,30 +208,42 @@ function Header() {
                             </li>
 
                             <li>
-                                <NavLink
+
+                                <ProtectedNavLink
                                     to="/face-swap"
-                                    className={getNavLinkClass}
+                                    user={user}
                                 >
+
                                     Face Swap
-                                </NavLink>
+
+                                </ProtectedNavLink>
+
                             </li>
 
                             <li>
-                                <NavLink
+
+                                <ProtectedNavLink
                                     to="/video-generation"
-                                    className={getNavLinkClass}
+                                    user={user}
                                 >
+
                                     Video Generation
-                                </NavLink>
+
+                                </ProtectedNavLink>
+
                             </li>
 
                             <li>
-                                <NavLink
+
+                                <ProtectedNavLink
                                     to="/image-generation"
-                                    className={getNavLinkClass}
+                                    user={user}
                                 >
+
                                     Image Generation
-                                </NavLink>
+
+                                </ProtectedNavLink>
+
                             </li>
 
                             <li>
@@ -277,17 +358,27 @@ function Header() {
                         Início
                     </NavLink>
 
-                    <NavLink to="/face-swap">
-                        Face Swap
-                    </NavLink>
+                    {
+                        user && (
 
-                    <NavLink to="/video-generation">
-                        Video Generation
-                    </NavLink>
+                            <>
 
-                    <NavLink to="/image-generation">
-                        Image Generation
-                    </NavLink>
+                                <NavLink to="/face-swap">
+                                    Face Swap
+                                </NavLink>
+
+                                <NavLink to="/video-generation">
+                                    Video Generation
+                                </NavLink>
+
+                                <NavLink to="/image-generation">
+                                    Image Generation
+                                </NavLink>
+
+                            </>
+
+                        )
+                    }
 
                     <NavLink to="/pricing">
                         Planos

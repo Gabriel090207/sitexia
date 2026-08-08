@@ -997,3 +997,12 @@
     }
 
 }
+
+
+.profile-confirm:disabled{
+
+    opacity:.7;
+
+    cursor:not-allowed;
+
+}

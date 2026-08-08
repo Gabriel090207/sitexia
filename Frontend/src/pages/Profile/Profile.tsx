@@ -88,6 +88,9 @@ export default function Profile() {
     const [closingCancelModal, setClosingCancelModal] =
         useState(false);
 
+    const [cancelLoading, setCancelLoading] =
+        useState(false);
+
     const [toast, setToast] = useState({
         open: false,
         title: "",
@@ -221,6 +224,8 @@ export default function Profile() {
 
         }
 
+        setCancelLoading(true);
+
         try {
 
             await cancelSubscription({
@@ -291,8 +296,13 @@ export default function Profile() {
 
         }
 
-        
+        finally {
 
+            setCancelLoading(false);
+
+        }
+
+        
     }
 
 
@@ -776,9 +786,18 @@ export default function Profile() {
                         <button
                             className="profile-confirm"
                             onClick={handleCancelSubscription}
+                            disabled={cancelLoading}
                         >
 
-                            Cancelar Assinatura
+                            {
+
+                                cancelLoading
+
+                                    ? "Cancelando..."
+
+                                    : "Cancelar Assinatura"
+
+                            }
 
                         </button>
 

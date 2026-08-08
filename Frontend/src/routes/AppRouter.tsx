@@ -6,6 +6,7 @@ import Home from "../pages/Home/Home";
 import FaceSwap from "../pages/FaceSwap/FaceSwap";
 import VideoGeneration from "../pages/VideoGeneration/VideoGeneration";
 import ImageGeneration from "../pages/ImageGeneration/ImageGeneration";
+import Library from "../pages/Library/Library";
 
 import Pricing from "../pages/Pricing/Pricing";
 import Checkout from "../pages/Checkout/Checkout";
@@ -41,6 +42,15 @@ function AppRouter() {
                 <Route
                     path="/image-generation"
                     element={<ImageGeneration />}
+                />
+
+                <Route
+                    path="/library"
+                    element={
+                        <ProtectedRoute>
+                            <Library />
+                        </ProtectedRoute>
+                    }
                 />
 
                 <Route

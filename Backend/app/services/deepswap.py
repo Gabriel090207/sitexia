@@ -177,7 +177,6 @@ async def get_task(task_id: str):
     )
 
 
-
 async def create_text_to_video_task(
     prompt: str,
     reference_image_url: str | None = None
@@ -185,7 +184,9 @@ async def create_text_to_video_task(
 
     payload = {
         "model": "deepvid2.0-t2v",
-        "prompt": prompt
+        "prompt": prompt,
+        "outputAudio": False,
+        "promptEnhance": True
     }
 
     if reference_image_url:
@@ -222,13 +223,76 @@ async def create_image_to_video_task(
         "prompt": prompt,
         "media": [
             {
-                "type": "referenceImage",
+                "type": "firstFrame",
                 "url": image_url
+            }
+        ],
+        "outputAudio": False,
+        "promptEnhance": True
+    }
+
+    return await post(
+        "/openapi/v1/aigc/video-generation/tasks",
+        payload
+    )
+
+
+async def create_video_extend_task(
+    source_task_id: str,
+    prompt: str
+):
+
+    payload = {
+        "model": "deepvid2.0-video-extend",
+        "prompt": prompt,
+        "sourceTaskId": int(source_task_id),
+        "outputAudio": False,
+        "partialAudio": False,
+        "promptEnhance": True
+    }
+
+    return await post(
+        "/openapi/v1/aigc/video-generation/tasks",
+        payload
+    )
+
+async def create_reference_to_video_task(
+    reference_url: str,
+    prompt: str
+):
+
+    payload = {
+        "model": "deepecho1.0-r2v",
+        "prompt": prompt,
+        "duration": 5,
+        "resolution": "720p",
+        "ratio": "16:9",
+        "media": [
+            {
+                "type": "referenceImage",
+                "url": reference_url
             }
         ]
     }
 
     return await post(
         "/openapi/v1/aigc/video-generation/tasks",
+        payload
+    )
+
+
+async def create_text_to_image_task(
+    prompt: str
+):
+
+    payload = {
+        "model": "neoreal-girl2.0",
+        "prompt": prompt,
+        "size": "768:1152",
+        "resultCount": 1
+    }
+
+    return await post(
+        "/openapi/v1/aigc/image-generation/tasks",
         payload
     )

@@ -478,6 +478,28 @@ async def mercado_pago_webhook(payload: dict):
         print(payload)
         print("======================================")
 
+        event_type = payload.get("type")
+
+        print("TIPO DO EVENTO:", event_type)
+
+        if event_type != "subscription_preapproval":
+
+            print(
+                "Evento ignorado pelo fluxo de assinatura:",
+                event_type
+            )
+
+            return {
+                "success": True,
+                "ignored": True,
+                "event_type": event_type
+            }
+
+        subscription_id = (
+            payload.get("data", {})
+            .get("id")
+        )
+
         subscription_id = (
             payload.get("data", {})
             .get("id")

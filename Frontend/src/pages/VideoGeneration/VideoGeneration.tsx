@@ -1,3 +1,9 @@
+import {
+    useEffect,
+    useRef,
+    useState,
+} from "react";
+
 import "./VideoGeneration.css";
 
 import {
@@ -5,9 +11,524 @@ import {
     Clock3,
     Images,
     MessageSquareText,
+    ArrowLeft,
+    X,
+    Video,
 } from "lucide-react";
 
+import {
+    uploadFile,
+} from "../../services/storage";
+
+import { useAuth } from "../../contexts/AuthContext";
+
+import {
+    createLibraryVideo,
+    subscribeToLibrary,
+    type LibraryItem,
+} from "../../services/library";
+
+import {
+    createImageToVideo,
+    createVideoExtend,
+    createReferenceToVideo,
+    createTextToVideo,
+    getVideoTask,
+} from "../../api/videoGeneration";
+
+
 export default function VideoGeneration() {
+
+const { user } = useAuth();
+
+type VideoMode =
+    | "image-to-video"
+    | "video-extend"
+    | "reference-to-video"
+    | "text-to-video";
+
+const [activeMode, setActiveMode] =
+    useState<VideoMode>("image-to-video");
+
+const imageInputRef =
+    useRef<HTMLInputElement>(null);
+
+const [selectedImage, setSelectedImage] =
+    useState<File | null>(null);
+
+const [imagePreview, setImagePreview] =
+    useState<string | null>(null);
+
+const [imageUrl, setImageUrl] =
+    useState("");
+
+const [prompt, setPrompt] =
+    useState("");  
+
+const [isUploading, setIsUploading] =
+    useState(false);
+
+const [isGenerating, setIsGenerating] =
+    useState(false);
+
+const [generationStatus, setGenerationStatus] =
+    useState("");
+
+const [generatedVideoUrl, setGeneratedVideoUrl] =
+    useState("");
+
+const [error, setError] =
+    useState("");
+
+const [libraryVideos, setLibraryVideos] =
+    useState<LibraryItem[]>([]);
+
+const [selectedSourceVideo, setSelectedSourceVideo] =
+    useState<LibraryItem | null>(null);
+
+const [isVideoSelectorOpen, setIsVideoSelectorOpen] =
+    useState(false);
+   
+    
+useEffect(() => {
+
+    if (!user) {
+
+        setLibraryVideos([]);
+
+        return;
+
+    }
+
+    const unsubscribe =
+        subscribeToLibrary(
+            user.uid,
+            (items) => {
+
+                const videos =
+                    items.filter((item) => {
+
+                        return (
+                            item.type === "video-generation" &&
+                            Boolean(item.videoUrl)
+                        );
+
+                    });
+
+                setLibraryVideos(videos);
+
+            }
+        );
+
+    return () => {
+
+        unsubscribe();
+
+    };
+
+}, [user]);
+
+
+function handleModeChange(
+    mode: VideoMode
+) {
+
+    if (activeMode === mode) {
+        return;
+    }
+
+    if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+    }
+
+    setActiveMode(mode);
+
+    setSelectedImage(null);
+    setImagePreview(null);
+    setImageUrl("");
+
+    setSelectedSourceVideo(null);
+
+    setPrompt("");
+    setError("");
+    setGeneratedVideoUrl("");
+    setGenerationStatus("");
+
+    if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+    }
+
+}
+
+async function handleImageChange(
+    event: React.ChangeEvent<HTMLInputElement>
+) {
+
+    const file = event.target.files?.[0];
+
+    if (!file) {
+        return;
+    }
+
+    setSelectedImage(file);
+
+    const previewUrl =
+        URL.createObjectURL(file);
+
+    setImagePreview(previewUrl);
+
+    setImageUrl("");
+    setGeneratedVideoUrl("");
+    setError("");
+
+    try {
+
+        setIsUploading(true);
+
+        const uploadedUrl =
+            await uploadFile(
+                file,
+                "video-generation"
+            );
+
+        setImageUrl(uploadedUrl);
+
+        console.log(
+            "Imagem do vídeo enviada:",
+            uploadedUrl
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Erro ao enviar imagem:",
+            error
+        );
+
+        setError(
+            "Não foi possível enviar a imagem. Tente novamente."
+        );
+
+    } finally {
+
+        setIsUploading(false);
+
+    }
+
+}
+
+function wait(ms: number) {
+
+    return new Promise((resolve) => {
+
+        setTimeout(resolve, ms);
+
+    });
+
+}
+
+async function waitForVideoTask(
+    taskId: string
+) {
+
+    while (true) {
+
+        const task =
+            await getVideoTask(taskId);
+
+        console.log(
+            "Status do vídeo:",
+            task
+        );
+
+        if (task.taskStatus === "PENDING") {
+
+            setGenerationStatus(
+                "Preparando geração..."
+            );
+
+        }
+
+        if (task.taskStatus === "RUNNING") {
+
+            setGenerationStatus(
+                "Gerando seu vídeo..."
+            );
+
+        }
+
+        if (
+            task.taskStatus === "SUCCEEDED"
+        ) {
+
+            return task;
+
+        }
+
+        if (
+            task.taskStatus === "FAILED"
+        ) {
+
+            throw new Error(
+                task.errorMsg ||
+                "A geração do vídeo falhou."
+            );
+
+        }
+
+        await wait(5000);
+
+    }
+
+}
+
+async function videoUrlToFile(
+    videoUrl: string
+): Promise<File> {
+
+    const response =
+        await fetch(videoUrl);
+
+    if (!response.ok) {
+
+        throw new Error(
+            "Não foi possível baixar o vídeo gerado."
+        );
+
+    }
+
+    const blob =
+        await response.blob();
+
+    return new File(
+        [blob],
+        `video-${Date.now()}.mp4`,
+        {
+            type:
+                blob.type ||
+                "video/mp4",
+        }
+    );
+
+}
+
+async function handleGenerateVideo() {
+
+    if (isUploading) {
+
+        setError(
+            "Aguarde o envio da imagem terminar."
+        );
+
+        return;
+
+    }
+
+    if (
+        activeMode === "image-to-video" &&
+        !imageUrl
+    ) {
+
+        setError(
+            "Selecione uma imagem primeiro."
+        );
+
+        return;
+
+    }
+
+    if (
+        activeMode === "reference-to-video" &&
+        !imageUrl
+    ) {
+
+        setError(
+            "Selecione uma imagem de referência primeiro."
+        );
+
+        return;
+
+    }
+
+    if (
+        activeMode === "text-to-video" &&
+        !imageUrl
+    ) {
+
+        setError(
+            "Selecione uma imagem de referência primeiro."
+        );
+
+        return;
+
+    }
+
+    if (
+        activeMode === "video-extend" &&
+        !selectedSourceVideo?.taskId
+    ) {
+
+        setError(
+            "Selecione um vídeo primeiro."
+        );
+
+        return;
+
+    }
+
+    if (!prompt.trim()) {
+
+        setError(
+            "Digite um prompt antes de gerar o vídeo."
+        );
+
+        return;
+
+    }
+
+    if (!user) {
+
+        setError(
+            "Usuário não autenticado."
+        );
+
+        return;
+
+    }
+
+    try {
+
+        setError("");
+        setGeneratedVideoUrl("");
+        setIsGenerating(true);
+
+        setGenerationStatus(
+            activeMode === "video-extend"
+                ? "Preparando extensão..."
+                : "Criando vídeo..."
+        );
+
+        let task;
+
+        if (activeMode === "video-extend") {
+
+            task = await createVideoExtend(
+                selectedSourceVideo!.taskId!,
+                prompt
+            );
+
+        } else if (
+            activeMode === "reference-to-video"
+        ) {
+
+            task = await createReferenceToVideo(
+                imageUrl,
+                prompt
+            );
+
+        } else if (
+            activeMode === "text-to-video"
+        ) {
+
+            task = await createTextToVideo(
+                prompt,
+                imageUrl
+            );
+
+        } else {
+
+            task = await createImageToVideo(
+                imageUrl,
+                prompt
+            );
+
+        }
+
+        console.log(
+            "Task de vídeo criada:",
+            task
+        );
+
+        setGenerationStatus(
+            "Preparando geração..."
+        );
+
+        const result =
+            await waitForVideoTask(
+                task.taskId
+            );
+
+        console.log(
+            "Vídeo finalizado:",
+            result
+        );
+
+        if (!result.videoUrl) {
+
+            throw new Error(
+                "A geração terminou sem retornar o vídeo."
+            );
+
+        }
+
+        setGenerationStatus(
+            "Salvando seu vídeo..."
+        );
+
+        const videoFile =
+            await videoUrlToFile(
+                result.videoUrl
+            );
+
+        const firebaseVideoUrl =
+            await uploadFile(
+                videoFile,
+                `users/${user.uid}/videos`
+            );
+
+        console.log(
+            "Vídeo salvo no Firebase:",
+            firebaseVideoUrl
+        );
+
+        await createLibraryVideo(
+            user.uid,
+            firebaseVideoUrl,
+            task.taskId
+        );
+
+        console.log(
+            "Vídeo salvo na biblioteca."
+        );
+
+        setGeneratedVideoUrl(
+            firebaseVideoUrl
+        );
+
+        setGenerationStatus("");
+
+    } catch (error) {
+
+        console.error(
+            "Erro ao gerar vídeo:",
+            error
+        );
+
+        setGenerationStatus("");
+
+        setError(
+            error instanceof Error
+                ? error.message
+                : "Não foi possível gerar o vídeo."
+        );
+
+    } finally {
+
+        setIsGenerating(false);
+
+    }
+
+}
 
     return (
 
@@ -33,145 +554,518 @@ export default function VideoGeneration() {
 
                 <section className="video-generation-card">
 
-                    {/* MODES */}
+                   {/* MODES */}
 
-                    <div className="video-generation-modes">
+                    {!isGenerating && !generatedVideoUrl && (
 
-                        <button className="video-generation-mode video-generation-mode-active">
-
-                            <ImagePlus size={22} />
-
-                            <span>
-
-                                Imagem para Vídeo
-
-                            </span>
-
-                        </button>
-
-                        <button className="video-generation-mode">
-
-                            <Clock3 size={22} />
-
-                            <span>
-
-                                Estender Vídeo
-
-                            </span>
-
-                        </button>
-
-                        <button className="video-generation-mode">
-
-                            <Images size={22} />
-
-                            <span>
-
-                                Referência para Vídeo
-
-                            </span>
-
-                            <small>
-
-                                Novo
-
-                            </small>
-
-                        </button>
-
-                        <button className="video-generation-mode">
-
-                            <MessageSquareText size={22} />
-
-                            <span>
-
-                                Texto para Vídeo
-
-                            </span>
-
-                        </button>
-
-                    </div>
-
-                    {/* UPLOAD */}
-
-                    <div className="video-generation-upload">
-
-                        <div className="video-generation-upload-content">
-
-                            <div className="video-generation-upload-icon">
-
-                                <ImagePlus size={42} />
-
-                            </div>
-
-                            <h2 className="video-generation-upload-title">
-
-                                Envie sua imagem
-
-                            </h2>
-
-                            <p className="video-generation-upload-description">
-
-                                Arraste uma imagem para esta área ou clique no botão abaixo para selecionar um arquivo.
-
-                            </p>
-
-                            <span className="video-generation-upload-formats">
-
-                                PNG • JPG • JPEG • WEBP
-
-                            </span>
+                        <div className="video-generation-modes">
 
                             <button
-                                className="video-generation-upload-button"
                                 type="button"
+                                className={`video-generation-mode ${
+                                    activeMode === "image-to-video"
+                                        ? "video-generation-mode-active"
+                                        : ""
+                                }`}
+                                onClick={() =>
+                                    handleModeChange("image-to-video")
+                                }
                             >
 
-                                Selecionar imagem
+                                <ImagePlus size={22} />
+
+                                <span>
+                                    Imagem para Vídeo
+                                </span>
+
+                            </button>
+
+
+                            <button
+                                type="button"
+                                className={`video-generation-mode ${
+                                    activeMode === "video-extend"
+                                        ? "video-generation-mode-active"
+                                        : ""
+                                }`}
+                                onClick={() =>
+                                    handleModeChange("video-extend")
+                                }
+                            >
+
+                                <Clock3 size={22} />
+
+                                <span>
+                                    Estender Vídeo
+                                </span>
+
+                            </button>
+
+
+                            <button
+                                type="button"
+                                className={`video-generation-mode ${
+                                    activeMode === "reference-to-video"
+                                        ? "video-generation-mode-active"
+                                        : ""
+                                }`}
+                                onClick={() =>
+                                    handleModeChange("reference-to-video")
+                                }
+                            >
+
+                                <Images size={22} />
+
+                                <span>
+                                    Referência para Vídeo
+                                </span>
+
+                                <small>
+                                    Novo
+                                </small>
+
+                            </button>
+
+
+                            <button
+                                type="button"
+                                className={`video-generation-mode ${
+                                    activeMode === "text-to-video"
+                                        ? "video-generation-mode-active"
+                                        : ""
+                                }`}
+                                onClick={() =>
+                                    handleModeChange("text-to-video")
+                                }
+                            >
+
+                                <MessageSquareText size={22} />
+
+                                <span>
+                                    Texto para Vídeo
+                                </span>
 
                             </button>
 
                         </div>
 
-                    </div>
+                    )}
 
-                    {/* PROMPT */}
 
-                    <div className="video-generation-prompt">
+                        {/* =========================
+                            CONTENT
+                        ========================= */}
 
-                        <h2 className="video-generation-prompt-title">
+                        {isGenerating ? (
 
-                            Prompt
+                            /* GENERATING */
 
-                        </h2>
+                            <div className="video-generation-generation-loading">
 
-                        <p className="video-generation-prompt-description">
+                                <div className="video-generation-generation-spinner" />
 
-                            Descreva como você deseja que o vídeo seja gerado. Quanto mais detalhes você fornecer, melhor será o resultado.
+                                <p>
+                                    {generationStatus || "Gerando seu vídeo..."}
+                                </p>
 
-                        </p>
+                            </div>
 
-                        <textarea
-                            className="video-generation-prompt-textarea"
-                            placeholder="Ex.: A personagem caminha lentamente olhando para a câmera enquanto o vento movimenta seus cabelos..."
-                        />
+                        ) : generatedVideoUrl ? (
 
-                    </div>
+                            /* RESULT */
 
-                   
+                            <div className="video-generation-generation-result">
 
-                    
+                                <button
+                                    type="button"
+                                    className="video-generation-back-button"
+                                    onClick={() => {
 
-                </section>
+                                        setGeneratedVideoUrl("");
 
-                {/* BUTTON */}
+                                        setImageUrl("");
 
-                    <button className="video-generation-button">
+                                        setImagePreview(null);
 
-                        Gerar Vídeo
+                                        setSelectedImage(null);
 
-                    </button>
+                                        setPrompt("");
+
+                                        setError("");
+
+                                        setGenerationStatus("");
+
+                                    }}
+                                >
+
+                                    <ArrowLeft size={18} />
+
+                                    <span>
+                                        Voltar
+                                    </span>
+
+                                </button>
+
+                                <video
+                                    src={generatedVideoUrl}
+                                    controls
+                                    playsInline
+                                    className="video-generation-generation-video"
+                                />
+
+                            </div>
+
+                        ) : (
+
+                            /* FORM */
+
+                            <>
+
+                                {/* UPLOAD */}
+
+
+                                {activeMode === "video-extend" ? (
+
+                                   <div className="video-generation-upload">
+
+                                        {selectedSourceVideo?.videoUrl ? (
+
+                                            <div className="video-generation-preview">
+
+                                                <video
+                                                    src={selectedSourceVideo.videoUrl}
+                                                    controls
+                                                    playsInline
+                                                    className="video-generation-preview-video"
+                                                />
+
+                                                <button
+                                                    type="button"
+                                                    className="video-generation-upload-button video-generation-change-button"
+                                                    onClick={() =>
+                                                        setIsVideoSelectorOpen(true)
+                                                    }
+                                                >
+                                                    Trocar vídeo
+                                                </button>
+
+                                            </div>
+
+                                        ) : (
+
+                                            <div className="video-generation-upload-content">
+
+                                                <div className="video-generation-upload-icon">
+
+                                                    <Clock3 size={42} />
+
+                                                </div>
+
+                                                <h2 className="video-generation-upload-title">
+                                                    Selecione seu vídeo
+                                                </h2>
+
+                                                <p className="video-generation-upload-description">
+                                                    Escolha um vídeo gerado anteriormente com a Xia para continuar a criação.
+                                                </p>
+
+                                                <span className="video-generation-upload-formats">
+                                                    VÍDEOS DA SUA BIBLIOTECA
+                                                </span>
+
+                                                <button
+                                                    className="video-generation-upload-button"
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setIsVideoSelectorOpen(true)
+                                                    }
+                                                >
+                                                    Selecionar vídeo
+                                                </button>
+
+                                            </div>
+
+                                        )}
+
+                                    </div>
+
+                                ) : (
+
+                                <div className="video-generation-upload">
+
+                                    <input
+                                        ref={imageInputRef}
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp"
+                                        onChange={handleImageChange}
+                                        hidden
+                                    />
+
+                                    {isUploading ? (
+
+                                        <div className="video-generation-upload-loading">
+
+                                            <div className="video-generation-upload-spinner" />
+
+                                        </div>
+
+                                    ) : imagePreview ? (
+
+                                        <div className="video-generation-preview">
+
+                                            <img
+                                                src={imagePreview}
+                                                alt="Imagem selecionada"
+                                                className="video-generation-preview-image"
+                                            />
+
+                                            <button
+                                                type="button"
+                                                className="video-generation-upload-button video-generation-change-button"
+                                                onClick={() =>
+                                                    imageInputRef.current?.click()
+                                                }
+                                            >
+                                                Trocar imagem
+                                            </button>
+
+                                        </div>
+
+                                    ) : (
+
+                                        <div className="video-generation-upload-content">
+
+                                            <div className="video-generation-upload-icon">
+
+                                                <ImagePlus size={42} />
+
+                                            </div>
+
+                                            <h2 className="video-generation-upload-title">
+
+                                                {activeMode === "reference-to-video" ||
+                                                activeMode === "text-to-video"
+                                                    ? "Envie sua imagem de referência"
+                                                    : "Envie sua imagem"}
+
+                                            </h2>
+
+                                            <p className="video-generation-upload-description">
+
+                                                {activeMode === "reference-to-video"
+                                                    ? "Envie uma imagem de referência para orientar a criação do vídeo."
+                                                    : activeMode === "text-to-video"
+                                                        ? "Envie uma imagem de referência para auxiliar a geração do vídeo a partir do seu texto."
+                                                        : "Arraste uma imagem para esta área ou clique no botão abaixo para selecionar um arquivo."}
+
+                                            </p>
+
+                                            <span className="video-generation-upload-formats">
+
+                                                PNG • JPG • JPEG • WEBP
+
+                                            </span>
+
+                                            <button
+                                                className="video-generation-upload-button"
+                                                type="button"
+                                                onClick={() =>
+                                                    imageInputRef.current?.click()
+                                                }
+                                            >
+
+                                                Selecionar imagem
+
+                                            </button>
+
+                                        </div>
+
+                                    )}
+
+                                </div>
+
+                                )}
+
+
+                                {/* PROMPT */}
+
+                                <div className="video-generation-prompt">
+
+                                    <h2 className="video-generation-prompt-title">
+
+                                        Prompt
+
+                                    </h2>
+
+                                    <p className="video-generation-prompt-description">
+
+                                        Descreva como você deseja que o vídeo seja gerado. Quanto mais detalhes você fornecer, melhor será o resultado.
+
+                                    </p>
+
+                                    <textarea
+                                        className="video-generation-prompt-textarea"
+                                        placeholder="Ex.: A personagem caminha lentamente olhando para a câmera enquanto o vento movimenta seus cabelos..."
+                                        value={prompt}
+                                        onChange={(event) =>
+                                            setPrompt(event.target.value)
+                                        }
+                                    />
+
+                                </div>
+
+                            </>
+
+                        )}
+
+                        </section>
+
+
+                        {/* =========================
+                            GENERATE BUTTON
+                        ========================= */}
+
+                        {!isGenerating && !generatedVideoUrl && (
+
+                            <button
+                                type="button"
+                                className="video-generation-button"
+                                onClick={handleGenerateVideo}
+                                disabled={isUploading}
+                            >
+
+                                {activeMode === "video-extend"
+                                    ? "Estender Vídeo"
+                                    : "Gerar Vídeo"}
+
+                            </button>
+
+                        )}
+
+
+                        {/* =========================
+                            ERROR
+                        ========================= */}
+
+                        {error && (
+
+                            <div className="video-generation-error">
+
+                                {error}
+
+                            </div>
+
+                        )} 
+
+                        {isVideoSelectorOpen && (
+
+                            <div
+                                className="video-generation-selector-overlay"
+                                onClick={() =>
+                                    setIsVideoSelectorOpen(false)
+                                }
+                            >
+
+                                <div
+                                    className="video-generation-selector"
+                                    onClick={(event) =>
+                                        event.stopPropagation()
+                                    }
+                                >
+
+                                    <div className="video-generation-selector-header">
+
+                                        <div>
+
+                                            <h2>
+                                                Selecione um vídeo
+                                            </h2>
+
+                                            <p>
+                                                Escolha um vídeo da sua biblioteca para continuar a geração.
+                                            </p>
+
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="video-generation-selector-close"
+                                            onClick={() =>
+                                                setIsVideoSelectorOpen(false)
+                                            }
+                                        >
+
+                                            <X size={20} />
+
+                                        </button>
+
+                                    </div>
+
+                                    {libraryVideos.length > 0 ? (
+
+                                        <div className="video-generation-selector-grid">
+
+                                            {libraryVideos.map((item) => (
+
+                                                <button
+                                                    key={item.id}
+                                                    type="button"
+                                                    className="video-generation-selector-item"
+                                                    onClick={() => {
+
+                                                        if (!item.taskId) {
+
+                                                            setError(
+                                                                "Este vídeo não pode ser estendido porque não possui a tarefa de geração original."
+                                                            );
+
+                                                            setIsVideoSelectorOpen(false);
+
+                                                            return;
+
+                                                        }
+
+                                                        setSelectedSourceVideo(item);
+
+                                                        setIsVideoSelectorOpen(false);
+
+                                                        setError("");
+
+                                                    }}
+                                                >
+
+                                                    <video
+                                                        src={item.videoUrl}
+                                                        muted
+                                                        playsInline
+                                                        preload="metadata"
+                                                    />
+
+                                                </button>
+
+                                            ))}
+
+                                        </div>
+
+                                    ) : (
+
+                                        <div className="video-generation-selector-placeholder">
+
+                                            <Video size={38} />
+
+                                            <p>
+                                                Nenhum vídeo disponível.
+                                            </p>
+
+                                        </div>
+
+                                    )}
+
+                                </div>
+
+                            </div>
+
+                        )}
 
             </div>
 

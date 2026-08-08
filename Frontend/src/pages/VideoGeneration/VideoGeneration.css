@@ -324,6 +324,55 @@
 }
 
 
+/* =====================================
+   IMAGE PREVIEW
+===================================== */
+
+.video-generation-preview{
+
+    width:100%;
+    min-height:420px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:24px;
+
+    padding:32px;
+
+}
+
+.video-generation-preview-image{
+
+    max-width:100%;
+
+    max-height:320px;
+
+    width:auto;
+    height:auto;
+
+    display:block;
+
+    object-fit:contain;
+
+    border-radius:18px;
+
+    border:1px solid rgba(255,255,255,.06);
+
+}
+
+.video-generation-change-button{
+
+    margin-top:0;
+
+}
+
+
 .video-generation-prompt{
 
     margin-bottom:0px;
@@ -436,6 +485,445 @@
 
 }
 
+
+
+
+/* =====================================
+   ERROR
+===================================== */
+
+.video-generation-error{
+
+    width:100%;
+
+    margin-top:18px;
+
+    padding:16px 18px;
+
+    border-radius:14px;
+
+    background:rgba(255,32,32,.08);
+
+    border:1px solid rgba(255,32,32,.22);
+
+    color:#ff7a7a;
+
+    font-size:14px;
+
+    line-height:1.6;
+
+}
+
+
+/* =====================================
+   UPLOAD LOADING
+===================================== */
+
+.video-generation-upload-loading{
+
+    width:100%;
+    min-height:420px;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+}
+
+.video-generation-upload-spinner{
+
+    width:72px;
+    height:72px;
+
+    border-radius:50%;
+
+    border:5px solid rgba(255,255,255,.08);
+
+    border-top-color:var(--primary);
+
+    animation:video-generation-upload-spin .8s linear infinite;
+
+}
+
+@keyframes video-generation-upload-spin{
+
+    from{
+
+        transform:rotate(0deg);
+
+    }
+
+    to{
+
+        transform:rotate(360deg);
+
+    }
+
+}
+
+
+/* =====================================
+   GENERATION LOADING
+===================================== */
+
+.video-generation-generation-loading{
+
+    width:100%;
+    min-height:650px;
+
+    display:flex;
+    flex-direction:column;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:24px;
+
+    background:#171717;
+
+    border:1px solid var(--border-color);
+
+    border-radius:22px;
+
+}
+
+.video-generation-generation-spinner{
+
+    width:72px;
+    height:72px;
+
+    flex-shrink:0;
+
+    border:5px solid rgba(255,255,255,.08);
+
+    border-top-color:var(--primary);
+
+    border-radius:50%;
+
+    animation:video-generation-generation-spin .8s linear infinite;
+
+}
+
+.video-generation-generation-loading p{
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    font-weight:500;
+
+}
+
+@keyframes video-generation-generation-spin{
+
+    from{
+
+        transform:rotate(0deg);
+
+    }
+
+    to{
+
+        transform:rotate(360deg);
+
+    }
+
+}
+
+
+/* =====================================
+   GENERATION RESULT
+===================================== */
+
+.video-generation-generation-result{
+
+    position:relative;
+
+    width:100%;
+    min-height:650px;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    padding:80px 30px 30px;
+
+
+    border-radius:22px;
+
+    overflow:hidden;
+
+}
+
+.video-generation-generation-video{
+
+    display:block;
+
+    width:auto;
+    max-width:100%;
+
+    max-height:560px;
+
+    border-radius:16px;
+
+    background:#000;
+
+}
+
+.video-generation-back-button{
+
+    position:absolute;
+
+    top:22px;
+    left:22px;
+
+    height:44px;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:8px;
+
+    padding:0 17px;
+
+    border-radius:12px;
+
+    background:none;
+
+    border:none;
+
+    color:var(--text-secondary);
+
+    font-size:14px;
+    font-weight:600;
+
+    transition:.25s;
+
+    z-index:2;
+
+}
+
+.video-generation-back-button:hover{
+
+    color:var(--primary);
+}
+
+
+
+/* =====================================
+   VIDEO SELECTOR
+===================================== */
+
+.video-generation-selector-overlay{
+
+    position:fixed;
+
+    inset:0;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    padding:30px;
+
+    background:rgba(0,0,0,.72);
+
+    backdrop-filter:blur(8px);
+
+    z-index:2000;
+
+}
+
+.video-generation-selector{
+
+    width:100%;
+
+    max-width:900px;
+
+    padding:28px;
+
+    background:var(--background-card);
+
+    border:1px solid var(--border-color);
+
+    border-radius:22px;
+
+    box-shadow:0 30px 80px rgba(0,0,0,.45);
+
+}
+
+.video-generation-selector-header{
+
+    display:flex;
+
+    align-items:flex-start;
+    justify-content:space-between;
+
+    gap:20px;
+
+}
+
+.video-generation-selector-header h2{
+
+    color:var(--text-primary);
+
+    font-size:24px;
+
+    font-weight:600;
+
+}
+
+.video-generation-selector-header p{
+
+    margin-top:8px;
+
+    color:var(--text-secondary);
+
+    font-size:14px;
+
+    line-height:1.6;
+
+}
+
+.video-generation-selector-close{
+
+    width:42px;
+    height:42px;
+
+    flex-shrink:0;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    border-radius:12px;
+
+    background:#222;
+
+    border:1px solid var(--border-color);
+
+    color:var(--text-secondary);
+
+    transition:.25s;
+
+}
+
+.video-generation-selector-close:hover{
+
+    color:#fff;
+
+    background:#292929;
+
+    border-color:rgba(255,32,32,.30);
+
+}
+
+.video-generation-selector-placeholder{
+
+    min-height:300px;
+
+    margin-top:26px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:14px;
+
+    border-radius:18px;
+
+    background:#171717;
+
+    border:1px solid var(--border-color);
+
+    color:var(--text-secondary);
+
+}
+
+.video-generation-selector-placeholder svg{
+
+    color:var(--primary);
+
+}
+
+.video-generation-selector-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(3, 1fr);
+
+    gap:16px;
+
+    margin-top:26px;
+
+}
+
+.video-generation-selector-item{
+
+    width:100%;
+
+    aspect-ratio:16 / 9;
+
+    padding:0;
+
+    overflow:hidden;
+
+    border-radius:16px;
+
+    background:#111;
+
+    border:2px solid transparent;
+
+    cursor:pointer;
+
+    transition:.25s;
+
+}
+
+.video-generation-selector-item:hover{
+
+    transform:translateY(-2px);
+
+    border-color:var(--primary);
+
+}
+
+.video-generation-selector-item video{
+
+    display:block;
+
+    width:100%;
+    height:100%;
+
+    object-fit:cover;
+
+    pointer-events:none;
+
+}
+
+.video-generation-preview-video{
+
+    display:block;
+
+    width:auto;
+    max-width:100%;
+
+    max-height:500px;
+
+    border-radius:16px;
+
+    background:#000;
+
+}
 
 /* =====================================
    RESPONSIVO
@@ -601,6 +1089,101 @@
 
     }
 
+    .video-generation-preview{
+
+        min-height:320px;
+
+        padding:24px;
+
+        gap:20px;
+
+    }
+
+    .video-generation-preview-image{
+
+        max-height:240px;
+
+    }
+
+    .video-generation-change-button{
+
+        width:100%;
+
+    }
+
+    .video-generation-generation-loading,
+    .video-generation-generation-result{
+
+        min-height:500px;
+
+    }
+
+    .video-generation-generation-result{
+
+        padding:75px 18px 18px;
+
+    }
+
+    .video-generation-generation-video{
+
+        max-height:440px;
+
+    }
+
+    .video-generation-back-button{
+
+        top:18px;
+        left:18px;
+
+        height:42px;
+
+        padding:0 14px;
+
+        font-size:13px;
+
+    }
+
+    .video-generation-upload-loading{
+
+        min-height:320px;
+
+    }
+
+    .video-generation-upload-spinner{
+
+        width:60px;
+        height:60px;
+
+        border-width:4px;
+
+    }
+
+    .video-generation-selector-overlay{
+
+        padding:15px;
+
+    }
+
+    .video-generation-selector{
+
+        padding:20px;
+
+    }
+
+    .video-generation-selector-header h2{
+
+        font-size:20px;
+
+    }
+
+    .video-generation-selector-grid{
+
+        grid-template-columns:repeat(2, 1fr);
+
+        gap:10px;
+
+    }
+
 }
 
 /* ===================================== */
@@ -748,6 +1331,20 @@
         margin-top:24px;
 
         font-size:14px;
+
+    }
+
+    .video-generation-preview{
+
+        min-height:280px;
+
+        padding:18px;
+
+    }
+
+    .video-generation-preview-image{
+
+        max-height:180px;
 
     }
 
