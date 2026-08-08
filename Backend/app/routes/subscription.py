@@ -2,6 +2,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from firebase_admin import auth
 
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
 from app.config.mp import subscription_sdk
 
 from firebase_admin import firestore
@@ -136,6 +139,14 @@ def sync_user_subscription(
 
     }, merge=True)
 
+def calculate_next_payment_date():
+
+    now = datetime.now()
+
+    next_payment = now + relativedelta(months=1)
+
+    return next_payment.isoformat()
+
 
 def get_subscription(subscription_id: str):
 
@@ -144,6 +155,7 @@ def get_subscription(subscription_id: str):
     )
 
     return response["response"]
+
 
 def get_payment(payment_id: str):
 
@@ -225,7 +237,7 @@ def create_subscription(data: SubscriptionPayment):
 
             "last_modified": subscription.get("last_modified"),
 
-            "next_payment_date": subscription.get("next_payment_date"),
+            "next_payment_date": calculate_next_payment_date(),
 
             "last_credit_date": None,
 
