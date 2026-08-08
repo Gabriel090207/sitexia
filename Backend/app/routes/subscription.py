@@ -145,6 +145,15 @@ def get_subscription(subscription_id: str):
 
     return response["response"]
 
+def get_payment(payment_id: str):
+
+    response = subscription_sdk.payment().get(
+        payment_id
+    )
+
+    return response["response"]
+    
+
 @router.get("/ping")
 def ping():
 
@@ -482,10 +491,39 @@ async def mercado_pago_webhook(payload: dict):
 
         print("TIPO DO EVENTO:", event_type)
 
+
+        if event_type == "payment":
+
+            payment_id = (
+                payload.get("data", {})
+                .get("id")
+            )
+
+            if not payment_id:
+
+                return {
+                    "success": True,
+                    "ignored": True
+                }
+
+            payment = get_payment(
+                str(payment_id)
+            )
+
+            print("========== PAGAMENTO CONSULTADO ==========")
+            print(payment)
+            print("==========================================")
+
+            return {
+                "success": True,
+                "payment_received": True
+            }
+
+
         if event_type != "subscription_preapproval":
 
             print(
-                "Evento ignorado pelo fluxo de assinatura:",
+                "Evento ignorado:",
                 event_type
             )
 
