@@ -97,8 +97,7 @@ const { user } = useAuth();
     const [prompt, setPrompt] =
         useState("");
 
-    const [referenceImage, setReferenceImage] =
-        useState<File | null>(null);
+    
 
     const [referencePreview, setReferencePreview] =
         useState<string | null>(null);
@@ -176,7 +175,7 @@ const [
         const previewUrl =
             URL.createObjectURL(file);
 
-        setReferenceImage(file);
+      
 
         setReferencePreview(previewUrl);
 
@@ -221,7 +220,7 @@ const [
 
         }
 
-        setReferenceImage(null);
+        
 
         setReferencePreview(null);
 

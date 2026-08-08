@@ -41,9 +41,6 @@ const { user } = useAuth();
 const [selectedFile, setSelectedFile] = useState<File | null>(null);
 const [fileUrl, setFileUrl] = useState("");
 
-const [selectedFaceFile, setSelectedFaceFile] =
-    useState<File | null>(null);
-
 const [loadingFile, setLoadingFile] = useState(false);
 
 const [loadingFace, setLoadingFace] = useState(false);
@@ -156,8 +153,6 @@ async function sleep(
                                                 setFaceUrl("");
 
                                                 setSelectedFile(null);
-
-                                                setSelectedFaceFile(null);
 
                                             }}
                                         >
@@ -376,8 +371,6 @@ async function sleep(
 
                                                     try{
 
-                                                        setSelectedFaceFile(file);
-
                                                         const url = await uploadFile(
                                                             file,
                                                             "face-swap-faces"
@@ -442,8 +435,6 @@ async function sleep(
                                                     setLoadingFace(true);
 
                                                     try{
-
-                                                        setSelectedFaceFile(file);
 
                                                         const url = await uploadFile(
                                                             file,

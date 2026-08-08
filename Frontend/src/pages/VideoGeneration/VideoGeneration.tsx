@@ -53,8 +53,7 @@ const [activeMode, setActiveMode] =
 const imageInputRef =
     useRef<HTMLInputElement>(null);
 
-const [selectedImage, setSelectedImage] =
-    useState<File | null>(null);
+
 
 const [imagePreview, setImagePreview] =
     useState<string | null>(null);
@@ -143,7 +142,7 @@ function handleModeChange(
 
     setActiveMode(mode);
 
-    setSelectedImage(null);
+  
     setImagePreview(null);
     setImageUrl("");
 
@@ -170,7 +169,7 @@ async function handleImageChange(
         return;
     }
 
-    setSelectedImage(file);
+
 
     const previewUrl =
         URL.createObjectURL(file);
@@ -687,7 +686,7 @@ async function handleGenerateVideo() {
 
                                         setImagePreview(null);
 
-                                        setSelectedImage(null);
+                                   
 
                                         setPrompt("");
 

@@ -5,7 +5,6 @@ import {
     onSnapshot,
     query,
     orderBy,
-    limit,
 } from "firebase/firestore";
 
 import db from "../firebase/firestore";
