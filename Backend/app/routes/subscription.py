@@ -521,6 +521,8 @@ def create_subscription(data: SubscriptionPayment):
 
     except Exception:
 
+        print("ERRO CREATE SUBSCRIPTION:", repr(e))
+
         raise HTTPException(
             status_code=500,
             detail="Não foi possível vincular a assinatura."
