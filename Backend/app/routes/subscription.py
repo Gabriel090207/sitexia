@@ -519,7 +519,7 @@ def create_subscription(data: SubscriptionPayment):
     except HTTPException:
         raise
 
-    except Exception:
+    except Exception as e:
 
         print("ERRO CREATE SUBSCRIPTION:", repr(e))
 
