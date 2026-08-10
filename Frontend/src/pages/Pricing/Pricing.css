@@ -267,19 +267,15 @@
 
 }
 
-.pricing-features li::before{
-
-    content:"✓";
+.pricing-features li svg {
 
     width:22px;
 
     height:22px;
 
-    display:flex;
+    flex-shrink:0;
 
-    align-items:center;
-
-    justify-content:center;
+    padding:4px;
 
     border-radius:50%;
 
@@ -287,10 +283,7 @@
 
     color:var(--primary);
 
-    font-size:12px;
-
-    font-weight:700;
-
+    stroke-width:3;
 }
 
 /* =====================================
@@ -326,6 +319,32 @@
     transform:translateY(-2px);
 
 }
+
+.pricing-card-current {
+    border-color: rgba(255,32,32,.35);
+}
+
+.pricing-button-current{
+
+    background:var(--background-card);
+
+    color:var(--text-secondary);
+
+    border:1px solid var(--border-color);
+
+    cursor:not-allowed;
+
+    opacity:.65;
+}
+
+.pricing-button-current:hover{
+
+    background:var(--background-card);
+
+    transform:none;
+}
+
+
 
 /* =====================================
    RESPONSIVO

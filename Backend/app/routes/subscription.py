@@ -7,6 +7,7 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 
 from app.config.mp import subscription_sdk
+from app.config.plans import PLANS
 
 from firebase_admin import firestore
 
@@ -16,7 +17,6 @@ router = APIRouter(
     prefix="/subscription",
     tags=["Subscription"]
 )
-
 
 class SubscriptionPayment(BaseModel):
 
@@ -28,15 +28,9 @@ class SubscriptionPayment(BaseModel):
 
     cpf: str
 
-    amount: float
-
     card_holder: str
 
     plan_id: str
-
-    plan_name: str
-
-    credits: int
 
 class LinkSubscriptionRequest(BaseModel):
 
@@ -212,6 +206,18 @@ def create_subscription(data: SubscriptionPayment):
 
     try:
 
+        plan = PLANS.get(data.plan_id)
+
+        if not plan:
+            raise HTTPException(
+                status_code=400,
+                detail="Plano inválido."
+            )
+
+        plan_name = plan["name"]
+        plan_price = plan["price"]
+        plan_credits = plan["credits"]
+
         user_ref = (
             db.collection("users")
             .document(data.user_id)
@@ -293,7 +299,7 @@ def create_subscription(data: SubscriptionPayment):
 
                 "frequency": 1,
                 "frequency_type": "months",
-                "transaction_amount": float(data.amount),
+                "transaction_amount": float(plan_price),
                 "currency_id": "BRL"
 
             },
@@ -366,11 +372,11 @@ def create_subscription(data: SubscriptionPayment):
 
             "plan_id": data.plan_id,
 
-            "plan_name": data.plan_name,
+            "plan_name": plan_name,
 
-            "credits": data.credits,
+            "credits": plan_credits,
 
-            "amount": data.amount,
+            "amount": plan_price,
 
             "status": subscription.get("status"),
 
@@ -434,7 +440,7 @@ def create_subscription(data: SubscriptionPayment):
 
             user_ref.update({
 
-                "plan": data.plan_name,
+                "plan": plan_name,
 
                 "credits": current_credits,
 
@@ -447,8 +453,7 @@ def create_subscription(data: SubscriptionPayment):
                 "subscription_plan_id":
                     data.plan_id,
 
-                "subscription_amount":
-                    data.amount,
+                "subscription_amount": plan_price,
 
                 "subscription_next_payment":
                     next_payment_date,
@@ -478,14 +483,9 @@ def create_subscription(data: SubscriptionPayment):
                 "plan_id":
                     data.plan_id,
 
-                "plan_name":
-                    data.plan_name,
-
-                "credits":
-                    data.credits,
-
-                "amount":
-                    data.amount,
+                "plan_name": plan_name,
+                "credits": plan_credits,
+                "amount": plan_price,
 
                 "status":
                     subscription.get("status"),
