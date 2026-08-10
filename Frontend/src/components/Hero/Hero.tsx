@@ -1,13 +1,18 @@
 import {
     ArrowRight,
-    Play,
+    LayoutGrid,
 } from "lucide-react";
+
+import { useNavigate } from "react-router-dom";
 
 import "./Hero.css";
 
 import HeroPreviewVideo from "../../assets/videos/hero-preview.mp4";
 
 function Hero() {
+
+const navigate = useNavigate();
+
     return (
         <section className="hero">
 
@@ -39,30 +44,39 @@ function Hero() {
 
                     <div className="hero-buttons">
 
-                        <button className="hero-primary-button">
-
+                        <button
+                            className="hero-primary-button"
+                            onClick={() => navigate("/pricing")}
+                        >
                             <span className="hero-primary-button-text">
-                                Começar Agora
+                                Ver Planos
                             </span>
 
                             <ArrowRight
                                 size={18}
                                 className="hero-primary-button-icon"
                             />
-
                         </button>
 
-                        <button className="hero-secondary-button">
-
-                            <Play
+                        <button
+                            className="hero-secondary-button"
+                            onClick={() => {
+                                document
+                                    .getElementById("ai-tools")
+                                    ?.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "start",
+                                    });
+                            }}
+                        >
+                            <LayoutGrid
                                 size={18}
                                 className="hero-secondary-button-icon"
                             />
 
                             <span className="hero-secondary-button-text">
-                                Ver demonstração
+                                Ver Ferramentas
                             </span>
-
                         </button>
 
                     </div>

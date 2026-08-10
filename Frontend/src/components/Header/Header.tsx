@@ -24,75 +24,6 @@ const getNavLinkClass = ({ isActive }: { isActive: boolean }) =>
         ? "header-navigation-link header-navigation-link-active"
         : "header-navigation-link";
 
-
-function ProtectedNavLink({
-
-    to,
-
-    children,
-
-    user,
-
-}:{
-
-    to:string;
-
-    children:React.ReactNode;
-
-    user:any;
-
-}){
-
-    if(user){
-
-        return(
-
-            <NavLink
-                to={to}
-                className={getNavLinkClass}
-            >
-
-                {children}
-
-            </NavLink>
-
-        );
-
-    }
-
-    return(
-
-        <div className="header-protected-link">
-
-            <span className="header-navigation-link">
-
-                {children}
-
-            </span>
-
-            <div className="header-protected-tooltip">
-
-                <strong>
-
-                    Faça login
-
-                </strong>
-
-                <p>
-
-                    Crie sua conta para acessar esta ferramenta.
-
-                </p>
-
-            </div>
-
-        </div>
-
-    );
-
-}
-
-
 function Header() {
 
     const {
@@ -158,7 +89,7 @@ function Header() {
 
         await logout();
 
-        navigate("/login");
+        navigate("/");
 
     }
 
@@ -207,42 +138,49 @@ function Header() {
                                 </NavLink>
                             </li>
 
+                            {user && (
+
+                                <li>
+                                    <NavLink
+                                        to="/library"
+                                        className={getNavLinkClass}
+                                    >
+                                        Biblioteca
+                                    </NavLink>
+                                </li>
+
+                            )}
+
                             <li>
 
-                                <ProtectedNavLink
+                                <NavLink
                                     to="/face-swap"
-                                    user={user}
+                                    className={getNavLinkClass}
                                 >
-
                                     Face Swap
-
-                                </ProtectedNavLink>
+                                </NavLink>
 
                             </li>
 
                             <li>
 
-                                <ProtectedNavLink
+                                <NavLink
                                     to="/video-generation"
-                                    user={user}
+                                    className={getNavLinkClass}
                                 >
-
                                     Video Generation
-
-                                </ProtectedNavLink>
+                                </NavLink>
 
                             </li>
 
                             <li>
 
-                                <ProtectedNavLink
+                                <NavLink
                                     to="/image-generation"
-                                    user={user}
+                                    className={getNavLinkClass}
                                 >
-
                                     Image Generation
-
-                                </ProtectedNavLink>
+                                </NavLink>
 
                             </li>
 
@@ -358,27 +296,25 @@ function Header() {
                         Início
                     </NavLink>
 
-                    {
-                        user && (
+                    {user && (
 
-                            <>
+                        <NavLink to="/library">
+                            Biblioteca
+                        </NavLink>
 
-                                <NavLink to="/face-swap">
-                                    Face Swap
-                                </NavLink>
+                    )}
 
-                                <NavLink to="/video-generation">
-                                    Video Generation
-                                </NavLink>
+                    <NavLink to="/face-swap">
+                        Face Swap
+                    </NavLink>
 
-                                <NavLink to="/image-generation">
-                                    Image Generation
-                                </NavLink>
+                    <NavLink to="/video-generation">
+                        Video Generation
+                    </NavLink>
 
-                            </>
-
-                        )
-                    }
+                    <NavLink to="/image-generation">
+                        Image Generation
+                    </NavLink>
 
                     <NavLink to="/pricing">
                         Planos

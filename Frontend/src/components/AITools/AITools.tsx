@@ -12,7 +12,7 @@ import "./AITools.css";
 
 function AITools() {
     return (
-        <section className="ai-tools">
+        <section id="ai-tools" className="ai-tools">
 
             <div className="ai-tools-container">
 
@@ -58,16 +58,16 @@ function AITools() {
 
                     <ToolCard
                         icon={<Clapperboard size={42} strokeWidth={1.8} />}
-                        title="Video Swap"
+                        title="Video Generator"
                         description="Substitua rostos em vídeos com rapidez e alta qualidade."
                         link="/video-generation"
                     />
 
                     <ToolCard
                         icon={<Video size={42} strokeWidth={1.8} />}
-                        title="AI Video"
+                        title="Text To Video"
                         description="Crie vídeos a partir de texto ou imagens usando inteligência artificial."
-                        link="/video-generation"
+                        link="/video-generation?mode=text-to-video"
                     />
 
                     <ToolCard

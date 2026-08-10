@@ -473,32 +473,46 @@
     }
 }
 
-.checkout-success::before {
-    content: "✓";
+.checkout-success-icon {
     width: 80px;
     height: 80px;
-    border-radius: 50%;
-    background: #ff2b2b;
-    color: white;
+
+    flex-shrink: 0;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.2rem;
-    font-weight: bold;
+
+    border-radius: 50%;
+
+    background: var(--primary);
+
+    color: #fff;
 }
 
-.checkout-error::before {
-    content: "✕";
+.checkout-success-icon svg {
+    display: block;
+}
+
+.checkout-error-icon {
     width: 80px;
     height: 80px;
-    border-radius: 50%;
-    background: #ff2b2b;
-    color: white;
+
+    flex-shrink: 0;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
-    font-weight: bold;
+
+    border-radius: 50%;
+
+    background: var(--primary);
+
+    color: #fff;
+}
+
+.checkout-error-icon svg {
+    display: block;
 }
 
 .checkout-submit-button {
@@ -659,5 +673,392 @@
 .checkout-eye-button:hover{
 
     color:#ff3030;
+
+}
+
+
+/* =====================================
+   RESPONSIVO
+===================================== */
+
+@media (max-width:992px){
+
+    .checkout{
+
+        padding:120px 40px 70px;
+
+    }
+
+    .checkout-title{
+
+        font-size:52px;
+
+    }
+
+    .checkout-layout{
+
+        grid-template-columns:1fr;
+
+    }
+
+    .checkout-summary-card{
+
+        min-height:0;
+
+    }
+
+}
+
+
+/* ===================================== */
+
+@media (max-width:768px){
+
+    .checkout{
+
+        padding:110px 20px 60px;
+
+    }
+
+    .checkout-header{
+
+        margin-bottom:40px;
+
+    }
+
+    .checkout-title{
+
+        font-size: 37px;
+
+        line-height:1.1;
+
+    }
+
+    .checkout-description{
+
+        margin-top:18px;
+
+        font-size:14px;
+
+        line-height:1.8;
+
+    }
+
+    .checkout-form-card{
+
+        min-height:0;
+
+        padding:22px;
+
+    }
+
+    .checkout-summary-card{
+
+        padding:22px;
+
+    }
+
+    .checkout-card-title{
+
+        font-size:22px;
+
+    }
+
+    .checkout-card-description{
+
+        font-size:14px;
+
+    }
+
+    .checkout-form{
+
+        margin-top:30px;
+
+        gap:22px;
+
+    }
+
+    .checkout-section-title{
+
+        font-size:20px;
+
+    }
+
+    .checkout-field input,
+    .checkout-mp-field{
+
+        height:54px;
+
+        font-size:14px;
+
+    }
+
+    .checkout-field-row{
+
+        grid-template-columns:1fr 1fr;
+
+        gap:14px;
+
+    }
+
+    .checkout-submit-button{
+
+        height:56px;
+
+        font-size:15px;
+
+    }
+
+    .checkout-summary{
+
+        margin-top:28px;
+
+    }
+
+    .checkout-summary-total strong{
+
+        font-size:24px;
+
+    }
+
+
+    /* =====================================
+       STATES
+    ===================================== */
+
+    .checkout-loading,
+    .checkout-success,
+    .checkout-error,
+    .checkout-account-page{
+
+        max-width:100%;
+
+        margin:30px auto;
+
+        padding:36px 24px;
+
+        border-radius:20px;
+
+    }
+
+    .checkout-loading h2,
+    .checkout-success h2,
+    .checkout-error h2,
+    .checkout-account-page h2{
+
+        font-size:26px;
+
+    }
+
+    .checkout-loading p,
+    .checkout-success p,
+    .checkout-error p,
+    .checkout-account-page p{
+
+        font-size:14px;
+
+    }
+
+    .checkout-loading-spinner{
+
+        width:64px;
+
+        height:64px;
+
+    }
+
+    .checkout-success-icon,
+    .checkout-error-icon,
+    .checkout-account-icon{
+
+        width:70px;
+
+        height:70px;
+
+    }
+
+}
+
+
+/* ===================================== */
+
+@media (max-width:340px){
+
+    .checkout{
+
+        padding:100px 15px 50px;
+
+    }
+
+    .checkout-title{
+
+        font-size:32px;
+
+    }
+
+    .checkout-description{
+
+        font-size:13px;
+
+    }
+
+    .checkout-form-card,
+    .checkout-summary-card{
+
+        padding:18px;
+
+    }
+
+    .checkout-card-title{
+
+        font-size:20px;
+
+    }
+
+    .checkout-card-description{
+
+        font-size:13px;
+
+    }
+
+    .checkout-form{
+
+        margin-top:26px;
+
+        gap:20px;
+
+    }
+
+    .checkout-section-title{
+
+        font-size:19px;
+
+    }
+
+    .checkout-field-row{
+
+        grid-template-columns:1fr;
+
+        gap:20px;
+
+    }
+
+    .checkout-field input,
+    .checkout-mp-field{
+
+        height:52px;
+
+        padding:0 15px;
+
+        font-size:14px;
+
+    }
+
+    .checkout-submit-button{
+
+        height:52px;
+
+        font-size:14px;
+
+    }
+
+    .checkout-summary{
+
+        margin-top:24px;
+
+        gap:18px;
+
+    }
+
+    .checkout-summary-row span,
+    .checkout-summary-row strong{
+
+        font-size:14px;
+
+    }
+
+    .checkout-summary-total span{
+
+        font-size:16px;
+
+    }
+
+    .checkout-summary-total strong{
+
+        font-size:22px;
+
+    }
+
+
+    /* =====================================
+       STATES
+    ===================================== */
+
+    .checkout-loading,
+    .checkout-success,
+    .checkout-error,
+    .checkout-account-page{
+
+        margin:20px auto;
+
+        padding:30px 18px;
+
+        gap:20px;
+
+        border-radius:18px;
+
+    }
+
+    .checkout-loading h2,
+    .checkout-success h2,
+    .checkout-error h2,
+    .checkout-account-page h2{
+
+        font-size:22px;
+
+    }
+
+    .checkout-loading p,
+    .checkout-success p,
+    .checkout-error p,
+    .checkout-account-page p{
+
+        font-size:13px;
+
+        line-height:1.6;
+
+    }
+
+    .checkout-loading-spinner{
+
+        width:58px;
+
+        height:58px;
+
+        border-width:4px;
+
+    }
+
+    .checkout-success-icon,
+    .checkout-error-icon,
+    .checkout-account-icon{
+
+        width:62px;
+
+        height:62px;
+
+    }
+
+    .checkout-password-wrapper input{
+
+        padding-right:50px;
+
+    }
+
+    .checkout-eye-button{
+
+        right:13px;
+
+    }
 
 }

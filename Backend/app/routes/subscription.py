@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from firebase_admin import auth
 
 from datetime import datetime
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 
 from app.config.mp import subscription_sdk
@@ -102,13 +103,27 @@ def sync_user_subscription(
         .document(firebase_uid)
     )
 
+    if subscription.get("status") == "cancelled":
+
+        user_ref.update({
+            "plan": "free",
+            "subscription_status": "cancelled",
+            "active_subscription": None,
+            "subscription_plan_id": None,
+            "subscription_amount": None,
+            "subscription_next_payment": None,
+            "subscription_payment_method": None,
+            "subscription_created_at": None,
+            "subscription_last_modified": None,
+            "subscription_payer_id": None
+        })
+
+        return
+
     user_ref.set({
 
         "plan":
             subscription.get("plan_name"),
-
-        "credits":
-            subscription.get("credits"),
 
         "subscription_status":
             subscription.get("status"),
@@ -164,8 +179,25 @@ def get_payment(payment_id: str):
     )
 
     return response["response"]
-    
 
+def search_subscriptions_by_payer(
+    payer_id: str
+):
+
+    response = (
+        subscription_sdk
+        .preapproval()
+        .search({
+            "payer_id": payer_id
+        })
+    )
+
+    return (
+        response
+        .get("response", {})
+        .get("results", [])
+    )
+    
 @router.get("/ping")
 def ping():
 
@@ -180,6 +212,71 @@ def create_subscription(data: SubscriptionPayment):
 
     try:
 
+        user_ref = (
+            db.collection("users")
+            .document(data.user_id)
+        )
+
+        user_snapshot = user_ref.get()
+
+        if not user_snapshot.exists:
+            raise HTTPException(
+                status_code=404,
+                detail="Usuário não encontrado."
+            )
+
+        user_data = user_snapshot.to_dict()
+
+        current_subscription_id = (
+            user_data.get("active_subscription")
+        )
+
+        current_credits = int(
+            user_data.get("credits") or 0
+        )
+
+        if current_subscription_id:
+            current_subscription_ref = (
+                db.collection("subscriptions")
+                .document(current_subscription_id)
+            )
+
+            current_subscription_snapshot = (
+                current_subscription_ref.get()
+            )
+
+            if current_subscription_snapshot.exists:
+
+                current_subscription = (
+                    current_subscription_snapshot.to_dict()
+                )
+
+            else:
+                current_subscription = None
+
+        else:
+            current_subscription = None
+
+        if current_subscription:
+
+            current_status = (
+                current_subscription.get("status")
+            )
+
+            if current_status not in [
+                "authorized",
+                "pending"
+            ]:
+
+                current_subscription = None
+
+        previous_subscription_id = None
+
+        if current_subscription:
+            previous_subscription_id = (
+                current_subscription_id
+            )
+
         subscription_data = {
 
             "reason": "Assinatura Xia",
@@ -187,6 +284,8 @@ def create_subscription(data: SubscriptionPayment):
             "payer_email": data.email,
 
             "card_token_id": data.token,
+
+            "external_reference": data.user_id,
 
             "back_url": "https://xiaswap.netlify.app",
 
@@ -207,9 +306,55 @@ def create_subscription(data: SubscriptionPayment):
             subscription_data
         )
 
-        subscription = mp_response["response"]
+        subscription = mp_response.get("response")
+
+        if not subscription or not subscription.get("id"):
+
+            raise HTTPException(
+                status_code=502,
+                detail="Mercado Pago não retornou uma nova assinatura válida."
+            )
 
         subscription_id = subscription["id"]
+
+        if previous_subscription_id == subscription_id:
+
+            raise HTTPException(
+                status_code=409,
+                detail="A nova assinatura não pode ser igual à assinatura anterior."
+            )
+
+        next_payment_date = (
+            subscription.get("next_payment_date")
+            or calculate_next_payment_date()
+        )
+
+        if previous_subscription_id:
+
+            previous_response = (
+                subscription_sdk.preapproval().update(
+                    previous_subscription_id,
+                    {
+                        "status": "cancelled"
+                    }
+                )
+            )
+
+            if not previous_response.get("response"):
+
+                raise HTTPException(
+                    status_code=502,
+                    detail="Mercado Pago não confirmou o cancelamento da assinatura anterior."
+                )
+
+            previous_subscription = (
+                previous_response["response"]
+            )
+
+            sync_subscription_data(
+                previous_subscription_id,
+                previous_subscription
+            )
 
         db.collection("subscriptions").document(
             subscription_id
@@ -237,9 +382,11 @@ def create_subscription(data: SubscriptionPayment):
 
             "last_modified": subscription.get("last_modified"),
 
-            "next_payment_date": calculate_next_payment_date(),
+            "next_payment_date": next_payment_date,
 
             "last_credit_date": None,
+
+            "last_charged_quantity": 0,
 
             "created_at": firestore.SERVER_TIMESTAMP
 
@@ -289,7 +436,7 @@ def create_subscription(data: SubscriptionPayment):
 
                 "plan": data.plan_name,
 
-                "credits": data.credits,
+                "credits": current_credits,
 
                 "subscription_status":
                     subscription.get("status"),
@@ -304,7 +451,7 @@ def create_subscription(data: SubscriptionPayment):
                     data.amount,
 
                 "subscription_next_payment":
-                    subscription.get("next_payment_date"),
+                    next_payment_date,
 
                 "subscription_payment_method":
                     subscription.get("payment_method_id"),
@@ -369,17 +516,15 @@ def create_subscription(data: SubscriptionPayment):
 
         }
 
-    except Exception as e:
+    except HTTPException:
+        raise
 
-        return {
+    except Exception:
 
-            "success": False,
-
-            "error": str(e)
-
-        }
-
-
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível vincular a assinatura."
+        )
 
 
 @router.post("/link-user")
@@ -399,13 +544,12 @@ def link_user_subscription(
 
         if not subscription_snapshot.exists:
 
-            return {
+            if not subscription_snapshot.exists:
 
-                "success": False,
-
-                "error": "Assinatura não encontrada."
-
-            }
+                raise HTTPException(
+                    status_code=404,
+                    detail="Assinatura não encontrada."
+                )
 
 
         subscription = subscription_snapshot.to_dict()
@@ -495,14 +639,7 @@ async def mercado_pago_webhook(payload: dict):
 
     try:
 
-        print("========== WEBHOOK RECEBIDO ==========")
-        print(payload)
-        print("======================================")
-
         event_type = payload.get("type")
-
-        print("TIPO DO EVENTO:", event_type)
-
 
         if event_type == "payment":
 
@@ -522,33 +659,314 @@ async def mercado_pago_webhook(payload: dict):
                 str(payment_id)
             )
 
-            print("========== PAGAMENTO CONSULTADO ==========")
-            print(payment)
-            print("==========================================")
+            if payment.get("status") != "approved":
+
+                return {
+                    "success": True,
+                    "ignored": True
+                }
+
+            if payment.get("operation_type") != "recurring_payment":
+
+                return {
+                    "success": True,
+                    "ignored": True
+                }
+
+            payer = payment.get("payer") or {}
+
+            payer_id = payer.get("id")
+
+            if not payer_id:
+
+                return {
+                    "success": True,
+                    "ignored": True
+                }
+
+            payer_subscriptions = (
+                search_subscriptions_by_payer(
+                    str(payer_id)
+                )
+            )
+
+            if not payer_subscriptions:
+
+                return {
+                    "success": True,
+                    "ignored": True
+                }
+
+            xia_subscriptions = []
+
+            for payer_subscription in payer_subscriptions:
+
+                subscription_id = payer_subscription.get("id")
+
+                if not subscription_id:
+                    continue
+
+                subscription_doc = (
+                    db.collection("subscriptions")
+                    .document(subscription_id)
+                    .get()
+                )
+
+                if not subscription_doc.exists:
+                    continue
+
+                xia_subscriptions.append({
+                    "id": subscription_id,
+                    "mercado_pago": payer_subscription,
+                    "firestore": subscription_doc.to_dict()
+                })
+
+            if not xia_subscriptions:
+
+                return {
+                    "success": True,
+                    "ignored": True
+                }
+
+            renewed_subscriptions = []
+
+            for item in xia_subscriptions:
+
+                mercado_pago_subscription = (
+                    item["mercado_pago"]
+                )
+
+                firestore_subscription = (
+                    item["firestore"]
+                )
+
+                summarized = (
+                    mercado_pago_subscription.get("summarized")
+                    or {}
+                )
+
+                charged_quantity = (
+                    summarized.get("charged_quantity")
+                    or 0
+                )
+
+                last_charged_quantity = (
+                    firestore_subscription.get(
+                        "last_charged_quantity"
+                    )
+                    or 0
+                )
+
+                if charged_quantity <= last_charged_quantity:
+                    continue
+
+                renewed_subscriptions.append({
+                    **item,
+                    "charged_quantity": charged_quantity
+                })
+
+            if not renewed_subscriptions:
+
+                return {
+                    "success": True,
+                    "ignored": True
+                } 
+
+            if len(renewed_subscriptions) != 1:
+
+                raise HTTPException(
+                    status_code=409,
+                    detail="Não foi possível identificar uma única assinatura renovada."
+                )  
+
+            renewed_subscription = renewed_subscriptions[0]
+
+            subscription_id = renewed_subscription["id"]
+
+            subscription_data = renewed_subscription["firestore"]
+
+            last_payment_id = subscription_data.get(
+                "last_payment_id"
+            )
+
+            if last_payment_id == str(payment_id):
+
+                return {
+                    "success": True,
+                    "ignored": True
+                }
+
+            mercado_pago_subscription = (
+                renewed_subscription["mercado_pago"]
+            )
+
+            charged_quantity = (
+                renewed_subscription["charged_quantity"]
+            )
+
+            subscription_status = (
+                mercado_pago_subscription.get("status")
+            )
+
+            if subscription_status != "authorized":
+
+                return {
+                    "success": True,
+                    "ignored": True
+                }
+
+            mercado_pago_amount = (
+                mercado_pago_subscription
+                .get("auto_recurring", {})
+                .get("transaction_amount")
+            )
+
+            xia_amount = subscription_data.get("amount")
+
+            if mercado_pago_amount is None or xia_amount is None:
+
+                raise HTTPException(
+                    status_code=409,
+                    detail="Valor da assinatura não identificado."
+                )
+
+            if (
+                Decimal(str(mercado_pago_amount))
+                != Decimal(str(xia_amount))
+            ):
+
+                raise HTTPException(
+                    status_code=409,
+                    detail="Valor da cobrança não corresponde à assinatura."
+                )
+
+            firebase_uid = subscription_data.get(
+                "firebase_uid"
+            )
+
+            if not firebase_uid:
+
+                raise HTTPException(
+                    status_code=409,
+                    detail="Usuário da assinatura não identificado."
+                )
+
+            user_ref = (
+                db.collection("users")
+                .document(firebase_uid)
+            )
+
+            user_snapshot = user_ref.get()
+
+            if not user_snapshot.exists:
+
+                raise HTTPException(
+                    status_code=404,
+                    detail="Usuário da assinatura não encontrado."
+                )
+
+            user_data = user_snapshot.to_dict()
+
+            credits_to_add = int(
+                subscription_data.get("credits") or 0
+            )
+
+            if credits_to_add <= 0:
+
+                raise HTTPException(
+                    status_code=409,
+                    detail="Quantidade de créditos da assinatura inválida."
+                )
+
+            transaction = db.transaction()
+
+            transaction_user_snapshot = (
+                transaction.get(user_ref)
+            )
+
+            if not transaction_user_snapshot.exists:
+
+                raise HTTPException(
+                    status_code=404,
+                    detail="Usuário da assinatura não encontrado."
+                )
+
+            transaction_user_data = (
+                transaction_user_snapshot.to_dict()
+            )
+
+            transaction_current_credits = int(
+                transaction_user_data.get("credits") or 0
+            )
+
+            transaction_new_credits = (
+                transaction_current_credits
+                + credits_to_add
+            )
+
+            transaction.update(
+                user_ref,
+                {
+                    "credits": transaction_new_credits,
+                    "subscription_status": "authorized",
+                    "active_subscription": subscription_id,
+                    "subscription_next_payment":
+                        mercado_pago_subscription.get(
+                            "next_payment_date"
+                        ),
+                    "subscription_last_modified":
+                        mercado_pago_subscription.get(
+                            "last_modified"
+                        )
+                }
+            )
+
+            subscription_ref = (
+                db.collection("subscriptions")
+                .document(subscription_id)
+            )
+
+            transaction.update(
+                subscription_ref,
+                {
+                    "last_credit_date":
+                        datetime.now().isoformat(),
+
+                    "last_charged_quantity":
+                        charged_quantity,
+
+                    "last_payment_id":
+                        str(payment_id),
+
+                    "next_payment_date":
+                        mercado_pago_subscription.get(
+                            "next_payment_date"
+                        ),
+
+                    "last_modified":
+                        mercado_pago_subscription.get(
+                            "last_modified"
+                        )
+                }
+            )
+
+            transaction.commit()
 
             return {
                 "success": True,
-                "payment_received": True
+                "payment_received": True,
+                "credits_added": credits_to_add,
+                "subscription_id": subscription_id
             }
 
 
         if event_type != "subscription_preapproval":
-
-            print(
-                "Evento ignorado:",
-                event_type
-            )
 
             return {
                 "success": True,
                 "ignored": True,
                 "event_type": event_type
             }
-
-        subscription_id = (
-            payload.get("data", {})
-            .get("id")
-        )
 
         subscription_id = (
             payload.get("data", {})
@@ -596,14 +1014,12 @@ async def mercado_pago_webhook(payload: dict):
             "success": True
         }
 
-    except Exception as e:
+    except Exception:
 
-        print(e)
-
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível processar o webhook."
+        )
 
 
 @router.post("/cancel")
@@ -648,14 +1064,6 @@ def cancel_subscription(
 
             subscription_data = subscription_doc.to_dict()
 
-            last_credit_date = subscription_data.get(
-                "last_credit_date"
-            )
-
-            next_payment_date = subscription.get(
-                "next_payment_date"
-            )
-
             firebase_uid = subscription_data.get(
                 "firebase_uid"
             )
@@ -668,8 +1076,6 @@ def cancel_subscription(
                 ).update({
 
                     "plan": "free",
-
-                    "credits": 0,
 
                     "subscription_status": "cancelled",
 
@@ -699,12 +1105,9 @@ def cancel_subscription(
 
         }
 
-    except Exception as e:
+    except Exception:
 
-        return {
-
-            "success": False,
-
-            "error": str(e)
-
-        }
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível cancelar a assinatura."
+        )

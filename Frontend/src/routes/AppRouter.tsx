@@ -2,6 +2,8 @@ import { Route, Routes } from "react-router-dom";
 
 import MainLayout from "../layouts/MainLayout/MainLayout";
 
+import ScrollToTop from "./ScrollToTop";
+
 import Home from "../pages/Home/Home";
 import FaceSwap from "../pages/FaceSwap/FaceSwap";
 import VideoGeneration from "../pages/VideoGeneration/VideoGeneration";
@@ -20,7 +22,10 @@ import PublicRoute from "./PublicRoute";
 
 function AppRouter() {
     return (
-        <Routes>
+        <>
+            <ScrollToTop />
+
+            <Routes>
 
             <Route element={<MainLayout />}>
 
@@ -88,7 +93,9 @@ function AppRouter() {
 
             </Route>
 
-        </Routes>
+            </Routes>
+
+        </>
     );
 }
 

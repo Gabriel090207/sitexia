@@ -1,15 +1,21 @@
 import "./Checkout.css";
-import { useState } from "react";
+import {
+    useRef,
+    useState,
+} from "react";
 
 import {
+    Navigate,
     useLocation,
     useNavigate
 } from "react-router-dom";
 
 import {
+    Check,
     Eye,
     EyeOff,
-    LockKeyhole
+    LockKeyhole,
+    X
 } from "lucide-react";
 
 import {
@@ -27,6 +33,80 @@ import { FirebaseError } from "firebase/app";
 import auth from "../../firebase/auth";
 
 import { createUserDocument } from "../../firebase/users";
+
+type SubscriptionResponse = {
+
+    user_exists: boolean;
+
+    custom_token?: string;
+
+    subscription_id?: string;
+
+};
+
+function isValidCpf(cpf: string) {
+
+    const numbers =
+        cpf.replace(/\D/g, "");
+
+    if (numbers.length !== 11) {
+        return false;
+    }
+
+    if (/^(\d)\1{10}$/.test(numbers)) {
+        return false;
+    }
+
+    const calculateDigit = (
+        base: string,
+        factor: number
+    ) => {
+
+        let total = 0;
+
+        for (const digit of base) {
+
+            total +=
+                Number(digit) * factor;
+
+            factor--;
+
+        }
+
+        const remainder =
+            (total * 10) % 11;
+
+        return remainder === 10
+            ? 0
+            : remainder;
+
+    };
+
+    const firstDigit =
+        calculateDigit(
+            numbers.slice(0, 9),
+            10
+        );
+
+    if (
+        firstDigit !==
+        Number(numbers[9])
+    ) {
+        return false;
+    }
+
+    const secondDigit =
+        calculateDigit(
+            numbers.slice(0, 10),
+            11
+        );
+
+    return (
+        secondDigit ===
+        Number(numbers[10])
+    );
+
+}
 
 export default function Checkout() {
 
@@ -62,14 +142,42 @@ const [passwordError, setPasswordError] = useState("");
 
 const [confirmPasswordError, setConfirmPasswordError] = useState("");
 
+const [checkoutError, setCheckoutError] = useState("");
+
 const [creatingAccount, setCreatingAccount] = useState(false);
 
-const [subscriptionResponse, setSubscriptionResponse] =
-    useState<any>(null);
+const [processingPayment, setProcessingPayment] =
+    useState(false);
 
-const mp = new window.MercadoPago(
-    import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY
+const [subscriptionResponse, setSubscriptionResponse] =
+    useState<SubscriptionResponse | null>(null);
+
+const mercadoPagoPublicKey =
+    import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY;
+
+if (!mercadoPagoPublicKey) {
+
+    throw new Error(
+        "VITE_MERCADO_PAGO_PUBLIC_KEY não configurada."
+    );
+
+}
+
+if (!window.MercadoPago) {
+
+    throw new Error(
+        "SDK do Mercado Pago não carregado."
+    );
+
+}
+
+const mpRef = useRef(
+    new window.MercadoPago(
+        mercadoPagoPublicKey
+    )
 );
+
+const mp = mpRef.current;
 
 const [checkoutStep, setCheckoutStep] = useState<
     | "checkout"
@@ -79,7 +187,169 @@ const [checkoutStep, setCheckoutStep] = useState<
     | "error"
 >("checkout");
 
+if (!plan) {
+
+    return (
+        <Navigate
+            to="/pricing"
+            replace
+        />
+    );
+
+}
+
 async function generateCardToken() {
+
+    if (
+        !cardHolder.trim() ||
+        !email.trim() ||
+        !cpf.trim() ||
+        !cardNumber.trim() ||
+        !cardHolderName.trim() ||
+        !cardExpiry.trim() ||
+        !cardCvv.trim()
+    ) {
+
+        setCheckoutError(
+            "Preencha todos os campos para continuar."
+        );
+
+        return;
+
+    }
+
+    setCheckoutError("");
+
+    const customerName =
+        cardHolder.trim();
+
+    if (customerName.length < 3) {
+
+        setCheckoutError(
+            "Digite seu nome completo."
+        );
+
+        return;
+
+    }
+
+    const emailRegex =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email.trim())) {
+
+        setCheckoutError(
+            "Digite um e-mail válido."
+        );
+
+        return;
+
+    }
+
+    if (!isValidCpf(cpf)) {
+
+        setCheckoutError(
+            "Digite um CPF válido."
+        );
+
+        return;
+
+    }
+
+    const cardNumbers =
+        cardNumber.replace(/\D/g, "");
+
+    if (cardNumbers.length !== 16) {
+
+        setCheckoutError(
+            "Digite um número de cartão válido."
+        );
+
+        return;
+
+    }
+
+    const holderName =
+        cardHolderName.trim();
+
+    if (holderName.length < 3) {
+
+        setCheckoutError(
+            "Digite o nome do titular do cartão."
+        );
+
+        return;
+
+    }
+
+    const [expiryMonth, expiryYear] =
+        cardExpiry.split("/");
+
+    const monthNumber =
+        Number(expiryMonth);
+
+    const yearNumber =
+        Number(`20${expiryYear}`);
+
+    if (
+        !expiryMonth ||
+        !expiryYear ||
+        expiryMonth.length !== 2 ||
+        expiryYear.length !== 2 ||
+        monthNumber < 1 ||
+        monthNumber > 12
+    ) {
+
+        setCheckoutError(
+            "Digite uma validade de cartão válida."
+        );
+
+        return;
+
+    }
+
+    const currentDate = new Date();
+
+    const currentMonth =
+        currentDate.getMonth() + 1;
+
+    const currentYear =
+        currentDate.getFullYear();
+
+    if (
+        yearNumber < currentYear ||
+        (
+            yearNumber === currentYear &&
+            monthNumber < currentMonth
+        )
+    ) {
+
+        setCheckoutError(
+            "Este cartão está vencido."
+        );
+
+        return;
+
+    }
+
+    const cvvNumbers =
+        cardCvv.replace(/\D/g, "");
+
+    if (cvvNumbers.length !== 3) {
+
+        setCheckoutError(
+            "Digite um CVV válido."
+        );
+
+        return;
+
+    }
+
+    if (processingPayment) {
+        return;
+    }
+
+    setProcessingPayment(true);
 
     setCheckoutStep("loading");
 
@@ -112,6 +382,14 @@ async function generateCardToken() {
 
         });
 
+        if (!tokenResponse?.id) {
+
+            throw new Error(
+                "Token do cartão não foi gerado."
+            );
+
+        }
+
         const response = await createSubscription({
 
             user_id: "",
@@ -134,10 +412,30 @@ async function generateCardToken() {
 
         });
 
+
+        if (
+            !response ||
+            typeof response.user_exists !== "boolean"
+        ) {
+
+            throw new Error(
+                "Resposta inválida ao criar assinatura."
+            );
+
+        }
+
         setSubscriptionResponse(response);
 
 
         if (response.user_exists) {
+
+            if (!response.custom_token) {
+
+                throw new Error(
+                    "Token de autenticação não recebido."
+                );
+
+            }
 
             await signInWithCustomToken(
                 auth,
@@ -148,13 +446,21 @@ async function generateCardToken() {
 
         } else {
 
+            if (!response.subscription_id) {
+
+                throw new Error(
+                    "Assinatura não retornada pelo servidor."
+                );
+
+            }
+
             setCheckoutStep("create-account");
 
         }
 
-    } catch (error) {
+    } catch {
 
-        console.error(error);
+        setProcessingPayment(false);
 
         setCheckoutStep("error");
 
@@ -226,6 +532,15 @@ if (checkoutStep === "error") {
 
             <div className="checkout-error">
 
+                <div className="checkout-error-icon">
+
+                    <X
+                        size={38}
+                        strokeWidth={2.5}
+                    />
+
+                </div>
+
                 <h2>
 
                     Não foi possível concluir sua assinatura
@@ -240,11 +555,15 @@ if (checkoutStep === "error") {
 
                 <button
                     className="checkout-submit-button"
-                    onClick={() => setCheckoutStep("checkout")}
+                    onClick={() => {
+
+                        setCheckoutError("");
+
+                        setCheckoutStep("checkout");
+
+                    }}
                 >
-
                     Tentar novamente
-
                 </button>
 
             </div>
@@ -262,6 +581,16 @@ if (checkoutStep === "success") {
         <main className="checkout">
 
             <div className="checkout-success">
+
+
+                <div className="checkout-success-icon">
+
+                    <Check
+                        size={38}
+                        strokeWidth={2.5}
+                    />
+
+                </div>
 
                 <h2>
 
@@ -463,6 +792,10 @@ if (checkoutStep === "create-account") {
 
 async function handleCreateAccount() {
 
+    if (creatingAccount) {
+        return;
+    }
+
     setPasswordError("");
     setConfirmPasswordError("");
 
@@ -486,6 +819,16 @@ async function handleCreateAccount() {
 
     }
 
+    if (!subscriptionResponse?.subscription_id) {
+
+        setPasswordError(
+            "Não foi possível localizar os dados da assinatura."
+        );
+
+        return;
+
+    }
+
     try {
 
         setCreatingAccount(true);
@@ -501,8 +844,6 @@ async function handleCreateAccount() {
             userCredential.user
         );
 
-
-        console.log(subscriptionResponse);
 
         await linkSubscription({
 
@@ -538,8 +879,6 @@ async function handleCreateAccount() {
                 setPasswordError(
                     "Não foi possível criar a conta."
                 );
-
-                console.error(authError);
 
                 break;
 
@@ -739,6 +1078,15 @@ async function handleCreateAccount() {
                                 </div>
 
                             </div>
+
+
+                            {checkoutError && (
+
+                                <p className="checkout-error-message">
+                                    {checkoutError}
+                                </p>
+
+                            )}
 
 
                             <button

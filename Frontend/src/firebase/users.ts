@@ -16,6 +16,19 @@ export async function createUserDocument(user: User) {
     const userSnapshot = await getDoc(userRef);
 
     if (userSnapshot.exists()) {
+
+        await setDoc(
+            userRef,
+            {
+                email: user.email,
+                displayName: user.displayName || "",
+                photoURL: user.photoURL || "",
+            },
+            {
+                merge: true,
+            }
+        );
+
         return;
     }
 

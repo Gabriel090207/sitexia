@@ -4,6 +4,8 @@ import {
     useState,
 } from "react";
 
+import { useSearchParams } from "react-router-dom";
+
 import "./VideoGeneration.css";
 
 import {
@@ -41,6 +43,8 @@ export default function VideoGeneration() {
 
 const { user } = useAuth();
 
+const [searchParams] = useSearchParams();
+
 type VideoMode =
     | "image-to-video"
     | "video-extend"
@@ -48,7 +52,17 @@ type VideoMode =
     | "text-to-video";
 
 const [activeMode, setActiveMode] =
-    useState<VideoMode>("image-to-video");
+    useState<VideoMode>(() => {
+
+        const mode = searchParams.get("mode");
+
+        if (mode === "text-to-video") {
+            return "text-to-video";
+        }
+
+        return "image-to-video";
+
+    });
 
 const imageInputRef =
     useRef<HTMLInputElement>(null);
