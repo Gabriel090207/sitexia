@@ -390,26 +390,21 @@ async function generateCardToken() {
 
         }
 
+        const currentUser = auth.currentUser;
+
+        if (!currentUser) {
+            throw new Error(
+                "Usuário não autenticado."
+            );
+        }
+
         const response = await createSubscription({
-
-            user_id: "",
-
+            user_id: currentUser.uid,
             token: tokenResponse.id,
-
             email,
-
             cpf: cpf.replace(/\D/g, ""),
-
-            amount: plan.price,
-
             card_holder: cardHolder,
-
             plan_id: plan.id,
-
-            plan_name: plan.name,
-
-            credits: plan.credits,
-
         });
 
 

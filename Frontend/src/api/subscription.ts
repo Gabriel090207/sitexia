@@ -10,15 +10,9 @@ export interface CreateSubscriptionRequest {
 
     cpf: string;
 
-    amount: number;
-
     card_holder: string;
 
     plan_id: string;
-
-    plan_name: string;
-
-    credits: number;
 
 }
 
