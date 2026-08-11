@@ -1,5 +1,6 @@
 import "./Checkout.css";
 import {
+    useEffect,
     useRef,
     useState,
 } from "react";
@@ -119,6 +120,18 @@ const plan = location.state?.plan;
 const [cardHolder, setCardHolder] = useState("");
 
 const [email, setEmail] = useState("");
+
+useEffect(() => {
+
+    const currentUser = auth.currentUser;
+
+    if (currentUser?.email) {
+
+        setEmail(currentUser.email);
+
+    }
+
+}, []);
 
 const [cpf, setCpf] = useState("");
 
@@ -950,6 +963,12 @@ async function handleCreateAccount() {
                                     placeholder="Digite seu e-mail"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
+                                    disabled={Boolean(auth.currentUser?.email)}
+                                    className={
+                                        auth.currentUser?.email
+                                            ? "checkout-input checkout-input-locked"
+                                            : "checkout-input"
+                                    }
                                 />
 
                             </div>

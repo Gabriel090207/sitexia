@@ -16,14 +16,18 @@ export async function createMaterial(
 export async function createSwapTask(
     materialId: string,
     sourceFaceId: string,
-    targetFaceUrl: string
+    targetFaceUrl: string,
+    userId: string,
+    generationCost: number
 ) {
     const { data } = await api.post(
         "/swap/task",
         {
             material_id: materialId,
             source_face_id: sourceFaceId,
-            target_face_url: targetFaceUrl
+            target_face_url: targetFaceUrl,
+            user_id: userId,
+            generation_cost: generationCost
         }
     );
 

@@ -57,7 +57,7 @@ useEffect(() => {
             const userData = snapshot.data();
 
             setCurrentPlan(
-                userData.plan || "free"
+                userData.subscription_plan_id || "free"
             );
 
         }

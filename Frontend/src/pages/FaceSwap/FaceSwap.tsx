@@ -5,6 +5,13 @@ import {
     useState,
 } from "react";
 
+import {
+    doc,
+    onSnapshot,
+} from "firebase/firestore";
+
+import db from "../../firebase/firestore";
+
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -17,6 +24,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import {
     ArrowLeft,
     Plus,
+    Coins,
 } from "lucide-react";
 
 import {
@@ -38,8 +46,34 @@ const navigate = useNavigate();
 
 const { user } = useAuth();
 
+const [credits, setCredits] = useState<number>(0);
+
 const [selectedFile, setSelectedFile] = useState<File | null>(null);
 const [fileUrl, setFileUrl] = useState("");
+
+const [videoDuration, setVideoDuration] =
+    useState<number>(0);
+
+const isVideo =
+    selectedFile?.type.startsWith("video/") ?? false;
+
+const isGif =
+    selectedFile?.type === "image/gif";
+
+const isImage =
+    !!selectedFile && !isVideo && !isGif;
+
+const generationCost =
+    isVideo
+        ? Math.max(
+            1,
+            Math.ceil(videoDuration / 15)
+        )
+        : isGif
+            ? 1
+            : isImage
+                ? 0.1
+                : 0;
 
 const [loadingFile, setLoadingFile] = useState(false);
 
@@ -55,6 +89,30 @@ const faceInputRef = useRef<HTMLInputElement>(null);
 
 const [isGenerating, setIsGenerating] =
     useState(false);
+
+const hasEnoughCredits =
+    credits >= generationCost;
+
+const canGenerate =
+    !!user &&
+    !!fileUrl &&
+    !!faceUrl &&
+    generationCost > 0 &&
+    hasEnoughCredits &&
+    !isGenerating;
+
+const generateBlockedMessage =
+    !user
+        ? "Faça login para criar um Face Swap."
+        : !fileUrl
+            ? "Selecione uma imagem ou vídeo para continuar."
+            : !faceUrl
+                ? "Adicione um rosto para continuar."
+                : generationCost > credits
+                    ? `Créditos insuficientes. Esta geração custa ${generationCost} ${
+                        generationCost === 1 ? "crédito" : "créditos"
+                    }.`
+                    : "";
 
 const [libraryItems, setLibraryItems] =
     useState<string[]>([]);
@@ -88,6 +146,80 @@ useEffect(() => {
 
 }, [user]);
 
+useEffect(() => {
+
+    if (!user) {
+        setCredits(0);
+        return;
+    }
+
+    const userRef = doc(
+        db,
+        "users",
+        user.uid
+    );
+
+    const unsubscribe = onSnapshot(
+        userRef,
+        (snapshot) => {
+
+            if (!snapshot.exists()) {
+                setCredits(0);
+                return;
+            }
+
+            const data = snapshot.data();
+
+            setCredits(
+                Number(data.credits ?? 0)
+            );
+        }
+    );
+
+    return () => {
+        unsubscribe();
+    };
+
+}, [user]);
+
+
+function getVideoDuration(
+    file: File
+): Promise<number> {
+
+    return new Promise((resolve, reject) => {
+
+        const video =
+            document.createElement("video");
+
+        const objectUrl =
+            URL.createObjectURL(file);
+
+        video.preload = "metadata";
+
+        video.onloadedmetadata = () => {
+
+            const duration = video.duration;
+
+            URL.revokeObjectURL(objectUrl);
+
+            resolve(duration);
+        };
+
+        video.onerror = () => {
+
+            URL.revokeObjectURL(objectUrl);
+
+            reject(
+                new Error(
+                    "Não foi possível identificar a duração do vídeo."
+                )
+            );
+        };
+
+        video.src = objectUrl;
+    });
+}
 
 async function sleep(
     ms: number
@@ -101,6 +233,14 @@ async function sleep(
         <main className="face-swap">
 
             <div className="face-swap-container">
+
+                <div className="face-swap-credits">
+                    <Coins size={20} />
+
+                    <span>
+                        {credits} {credits === 1 ? "crédito" : "créditos"}
+                    </span>
+                </div>
 
                 <header className="face-swap-header">
 
@@ -259,6 +399,19 @@ async function sleep(
                                                         try{
 
                                                             setSelectedFile(file);
+
+                                                            if (file.type.startsWith("video/")) {
+
+                                                                const duration =
+                                                                    await getVideoDuration(file);
+
+                                                                setVideoDuration(duration);
+
+                                                            } else {
+
+                                                                setVideoDuration(0);
+
+                                                            }
 
                                                             const url = await uploadFile(
                                                                 file,
@@ -474,7 +627,7 @@ async function sleep(
                             <button
                                 type="button"
                                 className="face-swap-create-button"
-                                disabled={isGenerating}
+                                disabled={!canGenerate}
                                 onClick={async () => {
 
                                     if (resultUrl){
@@ -528,10 +681,16 @@ async function sleep(
                                         sourceFaceId
                                     );
 
+                                    if (!user) {
+                                        throw new Error("Usuário não autenticado.");
+                                    }
+
                                     const task = await createSwapTask(
                                         materialData.materialId,
                                         sourceFaceId,
-                                        faceUrl
+                                        faceUrl,
+                                        user.uid,
+                                        generationCost
                                     );
 
                                     console.log(
@@ -601,7 +760,13 @@ async function sleep(
                                             : "Criar Face Swap"
                                 }
 
-                            </button>   
+                            </button> 
+
+                            {!isGenerating && generateBlockedMessage && (
+                                <p className="face-swap-create-blocked-message">
+                                    {generateBlockedMessage}
+                                </p>
+                            )}  
 
                     </div>
 

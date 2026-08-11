@@ -442,7 +442,7 @@ def create_subscription(data: SubscriptionPayment):
 
                 "plan": plan_name,
 
-                "credits": current_credits,
+                "credits": current_credits + plan_credits,
 
                 "subscription_status":
                     subscription.get("status"),
@@ -520,8 +520,6 @@ def create_subscription(data: SubscriptionPayment):
         raise
 
     except Exception as e:
-
-        print("ERRO CREATE SUBSCRIPTION:", repr(e))
 
         raise HTTPException(
             status_code=500,

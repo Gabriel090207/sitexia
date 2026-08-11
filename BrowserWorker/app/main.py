@@ -1,6 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-
 from playwright.async_api import async_playwright
 
 from app.browser import get_auth_data
@@ -19,7 +18,7 @@ app = FastAPI()
 async def root():
     return {
         "service": "BrowserWorker",
-        "status": "online"
+        "status": "online",
     }
 
 
@@ -32,17 +31,15 @@ async def resolve(request: ResolveRequest):
             settings.chrome_debug_url
         )
 
-        try:
+        auth = await get_auth_data(browser)
 
-            auth = await get_auth_data(browser)
-
-            result = await resolve_task(
-                request.task_id,
-                auth
+        if not auth.get("access_token") or not auth.get("x-device-id"):
+            raise HTTPException(
+                status_code=503,
+                detail="Chrome não está autenticado no DeepSwap.",
             )
 
-            return result
-
-        finally:
-
-            await browser.close()
+        return await resolve_task(
+            request.task_id,
+            auth,
+        )

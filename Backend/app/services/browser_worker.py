@@ -10,12 +10,6 @@ BROWSER_WORKER_URL = os.getenv(
     "BROWSER_WORKER_URL"
 )
 
-print(
-    "BROWSER_WORKER_URL:",
-    BROWSER_WORKER_URL
-)
-
-
 async def resolve_task(
     task_id: str
 ):
