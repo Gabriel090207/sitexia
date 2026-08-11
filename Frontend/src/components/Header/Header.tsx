@@ -96,6 +96,7 @@ function Header() {
     const avatarLetter =
         user?.email?.charAt(0).toUpperCase() ?? "";
 
+
     return (
 
         <>
