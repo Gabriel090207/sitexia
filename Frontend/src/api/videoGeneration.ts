@@ -4,7 +4,9 @@ const API_URL =
 
 export async function createImageToVideo(
     imageUrl: string,
-    prompt: string
+    prompt: string,
+    duration: number,
+    userId: string
 ) {
 
     const response = await fetch(
@@ -18,7 +20,9 @@ export async function createImageToVideo(
 
             body: JSON.stringify({
                 image_url: imageUrl,
-                prompt: prompt,
+                prompt,
+                duration,
+                user_id: userId,
             }),
         }
     );
@@ -32,8 +36,8 @@ export async function createImageToVideo(
     }
 
     return await response.json();
-
 }
+
 
 export async function getVideoTask(
     taskId: string
@@ -52,12 +56,14 @@ export async function getVideoTask(
     }
 
     return await response.json();
-
 }
+
 
 export async function createVideoExtend(
     sourceTaskId: string,
-    prompt: string
+    prompt: string,
+    duration: number,
+    userId: string
 ) {
 
     const response = await fetch(
@@ -72,6 +78,8 @@ export async function createVideoExtend(
             body: JSON.stringify({
                 source_task_id: sourceTaskId,
                 prompt,
+                duration,
+                user_id: userId,
             }),
         }
     );
@@ -84,12 +92,15 @@ export async function createVideoExtend(
 
     }
 
-    return response.json();
+    return await response.json();
 }
+
 
 export async function createReferenceToVideo(
     referenceUrl: string,
-    prompt: string
+    prompt: string,
+    duration: number,
+    userId: string
 ) {
 
     const response = await fetch(
@@ -104,6 +115,8 @@ export async function createReferenceToVideo(
             body: JSON.stringify({
                 reference_url: referenceUrl,
                 prompt,
+                duration,
+                user_id: userId,
             }),
         }
     );
@@ -116,12 +129,15 @@ export async function createReferenceToVideo(
 
     }
 
-    return response.json();
+    return await response.json();
 }
+
 
 export async function createTextToVideo(
     prompt: string,
-    referenceImageUrl: string
+    referenceImageUrl: string,
+    duration: number,
+    userId: string
 ) {
 
     const response = await fetch(
@@ -136,6 +152,8 @@ export async function createTextToVideo(
             body: JSON.stringify({
                 prompt,
                 reference_image_url: referenceImageUrl,
+                duration,
+                user_id: userId,
             }),
         }
     );
@@ -148,5 +166,5 @@ export async function createTextToVideo(
 
     }
 
-    return response.json();
+    return await response.json();
 }

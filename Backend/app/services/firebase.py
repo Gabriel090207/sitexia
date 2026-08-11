@@ -48,3 +48,41 @@ if not firebase_admin._apps:
 
 bucket = storage.bucket()
 db = firestore.client()
+
+@firestore.transactional
+def deduct_credits(
+    transaction,
+    user_ref,
+    cost: float
+):
+
+    snapshot = user_ref.get(
+        transaction=transaction
+    )
+
+    if not snapshot.exists:
+        raise ValueError(
+            "Usuário não encontrado."
+        )
+
+    user_data = snapshot.to_dict()
+
+    current_credits = float(
+        user_data.get("credits") or 0
+    )
+
+    if current_credits < cost:
+        raise ValueError(
+            "Créditos insuficientes."
+        )
+
+    new_credits = current_credits - cost
+
+    transaction.update(
+        user_ref,
+        {
+            "credits": new_credits
+        }
+    )
+
+    return new_credits

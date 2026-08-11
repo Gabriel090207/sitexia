@@ -6,6 +6,13 @@ import {
 
 import { useSearchParams } from "react-router-dom";
 
+import {
+    doc,
+    onSnapshot,
+} from "firebase/firestore";
+
+import db from "../../firebase/firestore";
+
 import "./VideoGeneration.css";
 
 import {
@@ -16,6 +23,7 @@ import {
     ArrowLeft,
     X,
     Video,
+    Coins,
 } from "lucide-react";
 
 import {
@@ -42,6 +50,9 @@ import {
 export default function VideoGeneration() {
 
 const { user } = useAuth();
+
+const [credits, setCredits] =
+    useState<number>(0);
 
 const [searchParams] = useSearchParams();
 
@@ -78,6 +89,14 @@ const [imageUrl, setImageUrl] =
 const [prompt, setPrompt] =
     useState("");  
 
+const [duration, setDuration] =
+    useState<5 | 10 | 15>(5);
+
+const generationCost =
+    activeMode === "reference-to-video"
+        ? (duration / 5) * 2
+        : (duration / 5) * 1.2;
+
 const [isUploading, setIsUploading] =
     useState(false);
 
@@ -101,8 +120,78 @@ const [selectedSourceVideo, setSelectedSourceVideo] =
 
 const [isVideoSelectorOpen, setIsVideoSelectorOpen] =
     useState(false);
+
+const hasRequiredMedia =
+    activeMode === "video-extend"
+        ? !!selectedSourceVideo?.taskId
+        : !!imageUrl;
+
+const hasEnoughCredits =
+    credits >= generationCost;
+
+const canGenerate =
+    !!user &&
+    hasRequiredMedia &&
+    !!prompt.trim() &&
+    hasEnoughCredits &&
+    !isUploading &&
+    !isGenerating;
+
+const generateBlockedMessage =
+    !user
+        ? "Faça login para gerar um vídeo."
+        : !hasRequiredMedia
+            ? activeMode === "video-extend"
+                ? "Selecione um vídeo para continuar."
+                : "Selecione uma imagem para continuar."
+            : !prompt.trim()
+                ? "Escreva um prompt para continuar."
+                : !hasEnoughCredits
+                    ? `Créditos insuficientes. Esta geração custa ${generationCost.toLocaleString(
+                        "pt-BR",
+                        {
+                            minimumFractionDigits: 1,
+                            maximumFractionDigits: 1,
+                        }
+                    )} créditos.`
+                    : "";
    
-    
+useEffect(() => {
+
+    if (!user) {
+        setCredits(0);
+        return;
+    }
+
+    const userRef = doc(
+        db,
+        "users",
+        user.uid
+    );
+
+    const unsubscribe = onSnapshot(
+        userRef,
+        (snapshot) => {
+
+            if (!snapshot.exists()) {
+                setCredits(0);
+                return;
+            }
+
+            const data = snapshot.data();
+
+            setCredits(
+                Number(data.credits ?? 0)
+            );
+        }
+    );
+
+    return () => {
+        unsubscribe();
+    };
+
+}, [user]);
+
 useEffect(() => {
 
     if (!user) {
@@ -163,6 +252,7 @@ function handleModeChange(
     setSelectedSourceVideo(null);
 
     setPrompt("");
+    setDuration(5);
     setError("");
     setGeneratedVideoUrl("");
     setGenerationStatus("");
@@ -427,7 +517,9 @@ async function handleGenerateVideo() {
 
             task = await createVideoExtend(
                 selectedSourceVideo!.taskId!,
-                prompt
+                prompt,
+                duration,
+                user.uid
             );
 
         } else if (
@@ -436,7 +528,9 @@ async function handleGenerateVideo() {
 
             task = await createReferenceToVideo(
                 imageUrl,
-                prompt
+                prompt,
+                duration,
+                user.uid
             );
 
         } else if (
@@ -445,14 +539,18 @@ async function handleGenerateVideo() {
 
             task = await createTextToVideo(
                 prompt,
-                imageUrl
+                imageUrl,
+                duration,
+                user.uid
             );
 
         } else {
 
             task = await createImageToVideo(
                 imageUrl,
-                prompt
+                prompt,
+                duration,
+                user.uid
             );
 
         }
@@ -548,6 +646,14 @@ async function handleGenerateVideo() {
         <main className="video-generation">
 
             <div className="video-generation-container">
+
+                <div className="video-generation-credits">
+                    <Coins size={20} />
+
+                    <span>
+                        {credits} {credits === 1 ? "crédito" : "créditos"}
+                    </span>
+                </div>
 
                 <header className="video-generation-header">
 
@@ -925,6 +1031,43 @@ async function handleGenerateVideo() {
                                         }
                                     />
 
+                                    {/* DURATION */}
+
+                                    <div className="video-generation-duration">
+
+                                        <h2 className="video-generation-duration-title">
+                                            Duração
+                                        </h2>
+
+                                        <p className="video-generation-duration-description">
+                                            Escolha a duração do vídeo que será gerado.
+                                        </p>
+
+                                        <div className="video-generation-duration-options">
+
+                                            {([5, 10, 15] as const).map((seconds) => (
+
+                                                <button
+                                                    key={seconds}
+                                                    type="button"
+                                                    className={`video-generation-duration-option ${
+                                                        duration === seconds
+                                                            ? "video-generation-duration-option-active"
+                                                            : ""
+                                                    }`}
+                                                    onClick={() =>
+                                                        setDuration(seconds)
+                                                    }
+                                                >
+                                                    {seconds}s
+                                                </button>
+
+                                            ))}
+
+                                        </div>
+
+                                    </div>
+
                                 </div>
 
                             </>
@@ -940,18 +1083,28 @@ async function handleGenerateVideo() {
 
                         {!isGenerating && !generatedVideoUrl && (
 
-                            <button
-                                type="button"
-                                className="video-generation-button"
-                                onClick={handleGenerateVideo}
-                                disabled={isUploading}
-                            >
+                            <>
 
-                                {activeMode === "video-extend"
-                                    ? "Estender Vídeo"
-                                    : "Gerar Vídeo"}
+                                <button
+                                    type="button"
+                                    className="video-generation-button"
+                                    onClick={handleGenerateVideo}
+                                    disabled={!canGenerate}
+                                >
 
-                            </button>
+                                    {activeMode === "video-extend"
+                                        ? "Estender Vídeo"
+                                        : "Gerar Vídeo"}
+
+                                </button>
+
+                                {generateBlockedMessage && (
+                                    <p className="video-generation-blocked-message">
+                                        {generateBlockedMessage}
+                                    </p>
+                                )}
+
+                            </>
 
                         )}
 

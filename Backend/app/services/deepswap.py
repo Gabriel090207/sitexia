@@ -179,13 +179,15 @@ async def get_task(task_id: str):
 
 async def create_text_to_video_task(
     prompt: str,
-    reference_image_url: str | None = None
+    reference_image_url: str | None = None,
+    duration: int = 5
 ):
 
     payload = {
         "model": "deepvid2.0-t2v",
         "prompt": prompt,
-        "outputAudio": False,
+        "duration": duration,
+        "outputAudio": True,
         "promptEnhance": True
     }
 
@@ -203,6 +205,7 @@ async def create_text_to_video_task(
         payload
     )
 
+
 async def get_video_task(
     task_id: str
 ):
@@ -215,19 +218,21 @@ async def get_video_task(
 
 async def create_image_to_video_task(
     image_url: str,
-    prompt: str
+    prompt: str,
+    duration: int
 ):
 
     payload = {
         "model": "deepvid2.0-i2v",
         "prompt": prompt,
+        "duration": duration,
         "media": [
             {
                 "type": "firstFrame",
                 "url": image_url
             }
         ],
-        "outputAudio": False,
+        "outputAudio": True,
         "promptEnhance": True
     }
 
@@ -239,14 +244,16 @@ async def create_image_to_video_task(
 
 async def create_video_extend_task(
     source_task_id: str,
-    prompt: str
+    prompt: str,
+    duration: int
 ):
 
     payload = {
         "model": "deepvid2.0-video-extend",
         "prompt": prompt,
+        "duration": duration,
         "sourceTaskId": int(source_task_id),
-        "outputAudio": False,
+        "outputAudio": True,
         "partialAudio": False,
         "promptEnhance": True
     }
@@ -255,16 +262,18 @@ async def create_video_extend_task(
         "/openapi/v1/aigc/video-generation/tasks",
         payload
     )
+    
 
 async def create_reference_to_video_task(
     reference_url: str,
-    prompt: str
+    prompt: str,
+    duration: int
 ):
 
     payload = {
         "model": "deepecho1.0-r2v",
         "prompt": prompt,
-        "duration": 5,
+        "duration": duration,
         "resolution": "720p",
         "ratio": "16:9",
         "media": [
@@ -279,6 +288,7 @@ async def create_reference_to_video_task(
         "/openapi/v1/aigc/video-generation/tasks",
         payload
     )
+
 
 
 async def create_text_to_image_task(

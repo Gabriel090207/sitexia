@@ -1349,3 +1349,178 @@
     }
 
 }
+
+
+/* ===========================
+   CREDITS
+=========================== */
+
+.video-generation-credits {
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 10px;
+
+    padding: 12px 16px;
+
+    margin-bottom: 25px;
+
+    border-radius: 14px;
+
+    background: rgba(255, 32, 32, .08);
+
+    border: 1px solid rgba(255, 32, 32, .18);
+
+    color: #ff6a6a;
+
+    font-size: 14px;
+    font-weight: 600;
+
+}
+
+.video-generation-credits svg {
+
+    flex-shrink: 0;
+
+    color: #ff6a6a;
+
+}
+
+
+/* ===========================
+   DURATION
+=========================== */
+
+.video-generation-duration {
+
+    margin-top: 24px;
+
+}
+
+.video-generation-duration-title {
+
+    margin: 0 0 8px;
+
+    font-size: 18px;
+    font-weight: 600;
+
+    color: #fff;
+
+}
+
+.video-generation-duration-description {
+
+    margin: 0 0 16px;
+
+    font-size: 14px;
+    line-height: 1.5;
+
+    color: rgba(255, 255, 255, .6);
+
+}
+
+.video-generation-duration-options {
+
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+
+    gap: 12px;
+
+}
+
+.video-generation-duration-option {
+
+    padding: 13px 16px;
+
+    border-radius: 12px;
+
+    border: 1px solid rgba(255, 255, 255, .1);
+
+    background: rgba(255, 255, 255, .04);
+
+    color: rgba(255, 255, 255, .7);
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        border-color .2s ease,
+        background .2s ease,
+        color .2s ease,
+        transform .2s ease;
+
+}
+
+.video-generation-duration-option:hover {
+
+    border-color: rgba(255, 255, 255, .2);
+
+    background: rgba(255, 255, 255, .07);
+
+}
+
+.video-generation-duration-option-active {
+
+    border-color: rgba(255, 32, 32, .35);
+
+    background: rgba(255, 32, 32, .10);
+
+    color: #ff6a6a;
+
+}
+
+/* ===========================
+   GENERATE BUTTON DISABLED
+=========================== */
+
+.video-generation-button:disabled {
+
+    opacity: .45;
+
+    cursor: not-allowed;
+
+    transform: none;
+
+    filter: grayscale(.15);
+
+}
+
+.video-generation-button:disabled:hover {
+
+    transform: none;
+
+    box-shadow: none;
+
+}
+
+
+/* ===========================
+   BLOCKED MESSAGE
+=========================== */
+
+.video-generation-blocked-message {
+
+    margin-top: 12px;
+
+    padding: 12px 16px;
+
+    border-radius: 12px;
+
+    background: rgba(255, 32, 32, .08);
+
+    border: 1px solid rgba(255, 32, 32, .18);
+
+    color: #ff6a6a;
+
+    font-size: 13px;
+    font-weight: 500;
+
+    line-height: 1.5;
+
+    text-align: center;
+
+}
