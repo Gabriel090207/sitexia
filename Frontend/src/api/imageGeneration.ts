@@ -3,7 +3,10 @@ const API_URL =
 
 
 export async function createTextToImage(
-    prompt: string
+    prompt: string,
+    style: string,
+    quantity: number,
+    userId: string
 ) {
 
     const response = await fetch(
@@ -17,19 +20,27 @@ export async function createTextToImage(
 
             body: JSON.stringify({
                 prompt,
+                style,
+                quantity,
+                user_id: userId,
             }),
         }
     );
 
     if (!response.ok) {
 
+        const errorData = await response
+            .json()
+            .catch(() => null);
+
         throw new Error(
+            errorData?.detail ||
             "Erro ao criar a geração de imagem."
         );
 
     }
 
-    return response.json();
+    return await response.json();
 }
 
 
@@ -43,11 +54,16 @@ export async function getImageTask(
 
     if (!response.ok) {
 
+        const errorData = await response
+            .json()
+            .catch(() => null);
+
         throw new Error(
+            errorData?.detail ||
             "Erro ao consultar a geração de imagem."
         );
 
     }
 
-    return response.json();
+    return await response.json();
 }

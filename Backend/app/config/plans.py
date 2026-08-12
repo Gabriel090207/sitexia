@@ -2,7 +2,7 @@ PLANS = {
 
     "starter": {
         "name": "Starter",
-        "price": 1.00,
+        "price": 129.90,
         "credits": 12,
     },
 

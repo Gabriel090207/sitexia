@@ -469,3 +469,334 @@
     }
 
 }
+
+
+/* =====================================
+CUSTO DOS CRÉDITOS
+===================================== */
+
+.pricing-credit-costs{
+
+    margin-top:80px;
+
+}
+
+.pricing-credit-costs-header{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    text-align:center;
+
+    margin-bottom:40px;
+
+}
+
+.pricing-credit-costs-header h2{
+
+    color:var(--text-primary);
+
+    font-size:36px;
+
+    font-weight:700;
+
+}
+
+.pricing-credit-costs-header h2 span{
+
+    background:linear-gradient(
+        180deg,
+        #ff5b5b,
+        #ff3030,
+        #d10d0d
+    );
+
+    -webkit-background-clip:text;
+
+    -webkit-text-fill-color:transparent;
+
+    background-clip:text;
+
+}
+
+.pricing-credit-costs-header p{
+
+    margin-top:16px;
+
+    max-width:620px;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    line-height:1.8;
+
+}
+
+
+/* =====================================
+TABELA
+===================================== */
+
+.pricing-credit-table-wrapper{
+
+    width:100%;
+
+    overflow:hidden;
+
+    border-radius:26px;
+
+    background:var(--background-card);
+
+    border:1px solid var(--border-color);
+
+}
+
+.pricing-credit-table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+    table-layout:fixed;
+
+}
+
+.pricing-credit-table th{
+
+    padding:22px 30px;
+
+    color:#8d8d8d;
+
+    font-size:13px;
+
+    font-weight:600;
+
+    letter-spacing:.8px;
+
+    text-transform:uppercase;
+
+    border-bottom:1px solid var(--border-color);
+
+}
+
+.pricing-credit-table td{
+
+    padding:20px 30px;
+
+    color:var(--text-secondary);
+
+    font-size:15px;
+
+    border-bottom:1px solid var(--border-color);
+
+}
+
+.pricing-credit-table tbody tr:last-child td{
+
+    border-bottom:none;
+
+}
+
+
+/* PRIMEIRA COLUNA */
+
+.pricing-credit-table th:first-child,
+.pricing-credit-table td:first-child{
+
+    text-align:left;
+
+}
+
+.pricing-credit-table td:first-child{
+
+    color:var(--text-primary);
+
+    font-weight:600;
+
+}
+
+
+/* COLUNA DO MEIO */
+
+.pricing-credit-table th:nth-child(2),
+.pricing-credit-table td:nth-child(2){
+
+    text-align:center;
+
+}
+
+
+/* COLUNA DE CUSTO */
+
+.pricing-credit-table th:last-child,
+.pricing-credit-table td:last-child{
+
+    text-align:right;
+
+}
+
+.pricing-credit-table td:last-child{
+
+    color:var(--primary);
+
+    font-weight:500;
+
+}
+
+.pricing-credit-table td:last-child strong{
+
+    color:var(--primary);
+
+    font-weight:700;
+
+}
+
+
+/* HOVER */
+
+.pricing-credit-table tbody tr{
+
+    transition:.25s;
+
+}
+
+.pricing-credit-table tbody tr:hover{
+
+    background:rgba(255,32,32,.04);
+
+}
+
+
+
+/* =====================================
+CUSTO DOS CRÉDITOS - RESPONSIVO
+===================================== */
+
+@media (max-width:768px){
+
+    .pricing-credit-costs{
+
+        margin-top:60px;
+
+    }
+
+    .pricing-credit-costs-header{
+
+        margin-bottom:30px;
+
+    }
+
+    .pricing-credit-costs-header h2{
+
+        font-size:30px;
+
+    }
+
+    .pricing-credit-costs-header p{
+
+        font-size: 10px;
+
+    }
+
+    .pricing-credit-table-wrapper{
+
+        width:100%;
+
+        overflow:hidden;
+
+        border-radius:20px;
+
+    }
+
+    .pricing-credit-table{
+
+        width:100%;
+
+        min-width:0;
+
+        table-layout:fixed;
+
+    }
+
+    .pricing-credit-table th{
+
+        padding:18px 14px;
+
+        font-size:10px;
+
+        letter-spacing:.3px;
+
+    }
+
+    .pricing-credit-table td{
+
+        padding:18px 14px;
+
+        font-size:12px;
+
+        line-height:1.5;
+
+        overflow-wrap:break-word;
+
+    }
+
+    .pricing-credit-table td:last-child strong{
+
+        font-size:13px;
+
+    }
+
+}
+
+
+@media (max-width:480px){
+
+    .pricing-credit-costs{
+
+        margin-top:50px;
+
+    }
+
+    .pricing-credit-costs-header h2{
+
+        font-size:26px;
+
+    }
+
+    .pricing-credit-costs-header p{
+
+         font-size: 10px;
+
+    }
+
+    .pricing-credit-table th{
+
+        padding:17px 10px;
+
+        font-size:9px;
+
+        letter-spacing:.2px;
+
+    }
+
+    .pricing-credit-table td{
+
+        padding:17px 10px;
+
+        font-size:10px;
+
+        line-height:1.5;
+
+    }
+
+    .pricing-credit-table td:last-child strong{
+
+        font-size:11px;
+
+    }
+
+}

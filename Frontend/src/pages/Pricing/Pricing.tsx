@@ -330,6 +330,116 @@ const isEnterpriseCurrent =
 
                 </div>
 
+
+                <section className="pricing-credit-costs">
+
+                    <div className="pricing-credit-costs-header">
+
+                        <h2>
+                            Como seus <span>créditos</span> são utilizados
+                        </h2>
+
+                        <p>
+                            Consulte o custo de cada geração antes de utilizar
+                            as ferramentas da Xia.
+                        </p>
+
+                    </div>
+
+                    <div className="pricing-credit-table-wrapper">
+
+                        <table className="pricing-credit-table">
+
+                            <thead>
+                                <tr>
+                                    <th>Ferramenta</th>
+                                    <th>Geração</th>
+                                    <th>Custo</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                <tr>
+                                    <td>Image Generation</td>
+                                    <td>1 imagem</td>
+                                    <td>
+                                        <strong>0,2</strong> crédito
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>Image Generation</td>
+                                    <td>4 imagens</td>
+                                    <td>
+                                        <strong>0,8</strong> crédito
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>Image Generation</td>
+                                    <td>9 imagens</td>
+                                    <td>
+                                        <strong>1,8</strong> créditos
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>Video Generation</td>
+                                    <td>5 segundos</td>
+                                    <td>
+                                        <strong>1,2</strong> créditos
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>Video Generation</td>
+                                    <td>10 segundos</td>
+                                    <td>
+                                        <strong>2,4</strong> créditos
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>Video Generation</td>
+                                    <td>15 segundos</td>
+                                    <td>
+                                        <strong>3,6</strong> créditos
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>Reference to Video</td>
+                                    <td>5 segundos</td>
+                                    <td>
+                                        <strong>2</strong> créditos
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>Reference to Video</td>
+                                    <td>10 segundos</td>
+                                    <td>
+                                        <strong>4</strong> créditos
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>Reference to Video</td>
+                                    <td>15 segundos</td>
+                                    <td>
+                                        <strong>6</strong> créditos
+                                    </td>
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </section>
+
             </div>
 
         </section>

@@ -262,7 +262,7 @@ async def create_video_extend_task(
         "/openapi/v1/aigc/video-generation/tasks",
         payload
     )
-    
+
 
 async def create_reference_to_video_task(
     reference_url: str,
@@ -292,14 +292,17 @@ async def create_reference_to_video_task(
 
 
 async def create_text_to_image_task(
-    prompt: str
+    prompt: str,
+    model: str,
+    size: str,
+    result_count: int
 ):
 
     payload = {
-        "model": "neoreal-girl2.0",
+        "model": model,
         "prompt": prompt,
-        "size": "768:1152",
-        "resultCount": 1
+        "size": size,
+        "resultCount": result_count
     }
 
     return await post(

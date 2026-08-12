@@ -16,13 +16,18 @@ import {
     Sparkles,
     X,
     Image as ImageIcon,
-    Square,
-    RectangleHorizontal,
-    RectangleVertical,
     Layers3,
+    Coins,
 } from "lucide-react";
 
 import { useAuth } from "../../contexts/AuthContext";
+
+import {
+    doc,
+    onSnapshot,
+} from "firebase/firestore";
+
+import db from "../../firebase/firestore";
 
 import {
     uploadImageFromUrl,
@@ -32,22 +37,14 @@ import {
     createLibraryImage,
 } from "../../services/library";
 
-type AspectRatio =
-    | "1:1"
-    | "16:9"
-    | "9:16"
-    | "4:5";
-
 type ImageStyle =
     | "realistic"
-    | "artistic"
-    | "anime"
-    | "3d";
+    | "anime";
 
 type ImageQuantity =
     | 1
-    | 2
-    | 4;
+    | 4
+    | 9;
 
 interface ImageStyleOption {
 
@@ -68,21 +65,9 @@ const imageStyles: ImageStyleOption[] = [
     },
 
     {
-        id: "artistic",
-        title: "Artístico",
-        description: "Composição criativa e estilizada.",
-    },
-
-    {
         id: "anime",
         title: "Anime",
         description: "Visual inspirado em animações.",
-    },
-
-    {
-        id: "3d",
-        title: "3D",
-        description: "Renderização tridimensional moderna.",
     },
 
 ];
@@ -90,6 +75,9 @@ const imageStyles: ImageStyleOption[] = [
 export default function ImageGeneration() {
 
 const { user } = useAuth();
+
+const [credits, setCredits] =
+    useState(0);
 
     const fileInputRef =
         useRef<HTMLInputElement | null>(null);
@@ -102,9 +90,6 @@ const { user } = useAuth();
     const [referencePreview, setReferencePreview] =
         useState<string | null>(null);
 
-    const [aspectRatio, setAspectRatio] =
-        useState<AspectRatio>("1:1");
-
     const [imageStyle, setImageStyle] =
         useState<ImageStyle>("realistic");
 
@@ -112,6 +97,13 @@ const { user } = useAuth();
         useState<ImageQuantity>(1);
 
 
+
+const generationCost =
+    quantity * 0.2;
+
+const hasEnoughCredits =
+    credits >= generationCost;
+    
     
     const [isGenerating, setIsGenerating] =
         useState(false);
@@ -123,6 +115,70 @@ const [
     generatedImageUrl,
     setGeneratedImageUrl,
 ] = useState("");
+
+
+const canGenerate =
+    !!user &&
+    !!prompt.trim() &&
+    hasEnoughCredits &&
+    !isGenerating;
+
+
+const generateBlockedMessage =
+    !user
+        ? "Faça login para gerar uma imagem."
+        : !prompt.trim()
+            ? "Escreva um prompt para continuar."
+            : !hasEnoughCredits
+                ? `Créditos insuficientes. Esta geração custa ${generationCost.toLocaleString(
+                    "pt-BR",
+                    {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1,
+                    }
+                )} créditos.`
+                : "";
+
+useEffect(() => {
+
+    if (!user) {
+
+        setCredits(0);
+
+        return;
+
+    }
+
+    const userRef = doc(
+        db,
+        "users",
+        user.uid
+    );
+
+    const unsubscribe = onSnapshot(
+        userRef,
+        (snapshot) => {
+
+            if (!snapshot.exists()) {
+
+                setCredits(0);
+
+                return;
+
+            }
+
+            const data = snapshot.data();
+
+            setCredits(
+                Number(data.credits ?? 0)
+            );
+
+        }
+    );
+
+    return () => unsubscribe();
+
+}, [user]);
 
     useEffect(() => {
 
@@ -307,7 +363,10 @@ async function handleGenerateImage() {
         // 1. Cria a task na DeepSwap
         const task =
             await createTextToImage(
-                prompt
+                prompt,
+                imageStyle,
+                quantity,
+                user.uid
             );
 
         console.log(
@@ -394,7 +453,17 @@ async function handleGenerateImage() {
 
             <div className="image-generation-container">
 
+                 <div className="image-generation-credits">
+                <Coins size={20} />
+
+                    <span>
+                        {credits} {credits === 1 ? "crédito" : "créditos"}
+                    </span>
+                </div>
+
                 <header className="image-generation-header">
+
+                   
 
                     <h1 className="image-generation-title">
 
@@ -647,99 +716,7 @@ async function handleGenerateImage() {
 
                             <div className="image-generation-settings">
 
-                                <div className="image-generation-setting">
-
-                                    <h3>
-
-                                        Proporção
-
-                                    </h3>
-
-                                    <div className="image-generation-ratio-grid">
-
-                                        <button
-                                            type="button"
-                                            className={
-                                                aspectRatio === "1:1"
-                                                    ? "image-generation-ratio image-generation-ratio-active"
-                                                    : "image-generation-ratio"
-                                            }
-                                            onClick={() =>
-                                                setAspectRatio("1:1")
-                                            }
-                                        >
-
-                                            <Square size={22} />
-
-                                            <span>1:1</span>
-
-                                            <small>Quadrado</small>
-
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            className={
-                                                aspectRatio === "16:9"
-                                                    ? "image-generation-ratio image-generation-ratio-active"
-                                                    : "image-generation-ratio"
-                                            }
-                                            onClick={() =>
-                                                setAspectRatio("16:9")
-                                            }
-                                        >
-
-                                            <RectangleHorizontal size={25} />
-
-                                            <span>16:9</span>
-
-                                            <small>Paisagem</small>
-
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            className={
-                                                aspectRatio === "9:16"
-                                                    ? "image-generation-ratio image-generation-ratio-active"
-                                                    : "image-generation-ratio"
-                                            }
-                                            onClick={() =>
-                                                setAspectRatio("9:16")
-                                            }
-                                        >
-
-                                            <RectangleVertical size={25} />
-
-                                            <span>9:16</span>
-
-                                            <small>Vertical</small>
-
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            className={
-                                                aspectRatio === "4:5"
-                                                    ? "image-generation-ratio image-generation-ratio-active"
-                                                    : "image-generation-ratio"
-                                            }
-                                            onClick={() =>
-                                                setAspectRatio("4:5")
-                                            }
-                                        >
-
-                                            <RectangleVertical size={23} />
-
-                                            <span>4:5</span>
-
-                                            <small>Retrato</small>
-
-                                        </button>
-
-                                    </div>
-
-                                </div>
+                                
 
 
                                 <div className="image-generation-setting">
@@ -814,7 +791,7 @@ async function handleGenerateImage() {
 
                                         {
 
-                                            ([1, 2, 4] as ImageQuantity[])
+                                            ([1, 4, 9] as ImageQuantity[])
                                                 .map(value => (
 
                                                     <button
@@ -856,10 +833,7 @@ async function handleGenerateImage() {
                         <button
                             type="button"
                             className="image-generation-button"
-                            disabled={
-                                !prompt.trim() ||
-                                isGenerating
-                            }
+                            disabled={!canGenerate}
                             onClick={handleGenerateImage}
                         >
 
@@ -872,6 +846,12 @@ async function handleGenerateImage() {
                             }
 
                         </button>
+
+                        {generateBlockedMessage && (
+                            <p className="image-generation-blocked-message">
+                                {generateBlockedMessage}
+                            </p>
+                        )}
 
                         {error && (
 
