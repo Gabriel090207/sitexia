@@ -69,7 +69,7 @@ function Footer() {
                             </Link>
 
                             <Link to="/pricing">
-                                Planos
+                                Pacotes de créditos
                             </Link>
 
                             <Link to="/library">

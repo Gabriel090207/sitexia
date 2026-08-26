@@ -67,7 +67,11 @@ function AppRouter() {
 
                 <Route
                     path="/checkout"
-                    element={<Checkout />}
+                    element={
+                        <ProtectedRoute>
+                            <Checkout />
+                        </ProtectedRoute>
+                    }
                 />
 
 

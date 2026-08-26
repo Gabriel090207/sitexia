@@ -65,6 +65,10 @@
 
 .profile-card{
 
+    display:flex;
+
+    flex-direction:column;
+
     background:var(--background-card);
 
     border:1px solid var(--border-color);
@@ -318,6 +322,12 @@
     background:rgba(255,32,32,.14);
 
     border-color:rgba(255,32,32,.35);
+
+}
+
+.profile-card > .profile-plan-button{
+
+    margin-top:auto;
 
 }
 

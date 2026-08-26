@@ -320,32 +320,6 @@
 
 }
 
-.pricing-card-current {
-    border-color: rgba(255,32,32,.35);
-}
-
-.pricing-button-current{
-
-    background:var(--background-card);
-
-    color:var(--text-secondary);
-
-    border:1px solid var(--border-color);
-
-    cursor:not-allowed;
-
-    opacity:.65;
-}
-
-.pricing-button-current:hover{
-
-    background:var(--background-card);
-
-    transform:none;
-}
-
-
-
 /* =====================================
    RESPONSIVO
 ===================================== */

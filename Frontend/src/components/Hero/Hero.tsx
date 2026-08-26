@@ -49,7 +49,7 @@ const navigate = useNavigate();
                             onClick={() => navigate("/pricing")}
                         >
                             <span className="hero-primary-button-text">
-                                Ver Planos
+                                Comprar créditos
                             </span>
 
                             <ArrowRight

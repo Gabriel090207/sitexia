@@ -190,7 +190,7 @@ function Header() {
                                     to="/pricing"
                                     className={getNavLinkClass}
                                 >
-                                    Planos
+                                    Comprar créditos
                                 </NavLink>
                             </li>
 
@@ -318,7 +318,7 @@ function Header() {
                     </NavLink>
 
                     <NavLink to="/pricing">
-                        Planos
+                        Comprar créditos
                     </NavLink>
 
                 </nav>

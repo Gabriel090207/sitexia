@@ -1,1174 +1,837 @@
 import "./Checkout.css";
-import {
-    useEffect,
-    useRef,
-    useState,
-} from "react";
 
-import {
-    Navigate,
-    useLocation,
-    useNavigate
-} from "react-router-dom";
+import { useRef, useState } from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { CreditCard, QrCode, Zap } from "lucide-react";
 
-import {
-    Check,
-    Eye,
-    EyeOff,
-    LockKeyhole,
-    X
-} from "lucide-react";
-
-import {
-    createSubscription,
-    linkSubscription
-} from "../../api/subscription";
-
-import {
-    createUserWithEmailAndPassword,
-    signInWithCustomToken,
-} from "firebase/auth";
-
-import { FirebaseError } from "firebase/app";
-
+import type { Plan } from "../../config/plans";
 import auth from "../../firebase/auth";
+import {
+    createCardOrder,
+    createPaymentAttempt,
+    createPixOrder,
+    createTopup,
+} from "../../api/topups";
+import type { MercadoPagoInstance } from "../../types/mercadopago";
 
-import { createUserDocument } from "../../firebase/users";
+type PaymentMethod = "pix" | "card";
+type PixStage =
+    | "idle"
+    | "creating_topup"
+    | "creating_attempt"
+    | "creating_order"
+    | "waiting_payment"
+    | "error";
 
-type SubscriptionResponse = {
+interface PixState {
+    stage: PixStage;
+    topupId: string | null;
+    paymentAttemptId: string | null;
+    orderId: string | null;
+    status: string | null;
+    statusDetail: string | null;
+    qrCode: string | null;
+    qrCodeBase64: string | null;
+    ticketUrl: string | null;
+    expiresAt: string | null;
+    error: string;
+}
 
-    user_exists: boolean;
+type CardStage =
+    | "idle"
+    | "creating_topup"
+    | "creating_attempt"
+    | "tokenizing"
+    | "processing"
+    | "approved"
+    | "rejected"
+    | "error";
 
-    custom_token?: string;
+interface CardState {
+    stage: CardStage;
+    topupId: string | null;
+    paymentAttemptId: string | null;
+    orderId: string | null;
+    status: string | null;
+    statusDetail: string | null;
+    error: string;
+    retryAllowed: boolean;
+}
 
-    subscription_id?: string;
+const INITIAL_PIX_STATE: PixState = {
+    stage: "idle",
+    topupId: null,
+    paymentAttemptId: null,
+    orderId: null,
+    status: null,
+    statusDetail: null,
+    qrCode: null,
+    qrCodeBase64: null,
+    ticketUrl: null,
+    expiresAt: null,
+    error: "",
+};
 
+const INITIAL_CARD_STATE: CardState = {
+    stage: "idle",
+    topupId: null,
+    paymentAttemptId: null,
+    orderId: null,
+    status: null,
+    statusDetail: null,
+    error: "",
+    retryAllowed: true,
 };
 
 function isValidCpf(cpf: string) {
+    const numbers = cpf.replace(/\D/g, "");
+    if (numbers.length !== 11 || /^(\d)\1{10}$/.test(numbers)) return false;
 
-    const numbers =
-        cpf.replace(/\D/g, "");
-
-    if (numbers.length !== 11) {
-        return false;
-    }
-
-    if (/^(\d)\1{10}$/.test(numbers)) {
-        return false;
-    }
-
-    const calculateDigit = (
-        base: string,
-        factor: number
-    ) => {
-
+    const calculateDigit = (base: string, factor: number) => {
         let total = 0;
-
         for (const digit of base) {
-
-            total +=
-                Number(digit) * factor;
-
+            total += Number(digit) * factor;
             factor--;
-
         }
-
-        const remainder =
-            (total * 10) % 11;
-
-        return remainder === 10
-            ? 0
-            : remainder;
-
+        const remainder = (total * 10) % 11;
+        return remainder === 10 ? 0 : remainder;
     };
 
-    const firstDigit =
-        calculateDigit(
-            numbers.slice(0, 9),
-            10
-        );
-
-    if (
-        firstDigit !==
-        Number(numbers[9])
-    ) {
-        return false;
-    }
-
-    const secondDigit =
-        calculateDigit(
-            numbers.slice(0, 10),
-            11
-        );
-
-    return (
-        secondDigit ===
-        Number(numbers[10])
-    );
-
-}
-
-export default function Checkout() {
-
-const location = useLocation();
-
-const navigate = useNavigate();
-
-const plan = location.state?.plan;
-
-const [cardHolder, setCardHolder] = useState("");
-
-const [email, setEmail] = useState("");
-
-useEffect(() => {
-
-    const currentUser = auth.currentUser;
-
-    if (currentUser?.email) {
-
-        setEmail(currentUser.email);
-
-    }
-
-}, []);
-
-const [cpf, setCpf] = useState("");
-
-const [cardHolderName, setCardHolderName] = useState("");
-
-const [cardNumber, setCardNumber] = useState("");
-
-const [cardExpiry, setCardExpiry] = useState("");
-
-const [cardCvv, setCardCvv] = useState("");
-
-const [password, setPassword] = useState("");
-
-const [confirmPassword, setConfirmPassword] = useState("");
-
-const [showPassword, setShowPassword] = useState(false);
-
-const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-const [passwordError, setPasswordError] = useState("");
-
-const [confirmPasswordError, setConfirmPasswordError] = useState("");
-
-const [checkoutError, setCheckoutError] = useState("");
-
-const [creatingAccount, setCreatingAccount] = useState(false);
-
-const [processingPayment, setProcessingPayment] =
-    useState(false);
-
-const [subscriptionResponse, setSubscriptionResponse] =
-    useState<SubscriptionResponse | null>(null);
-
-const mercadoPagoPublicKey =
-    import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY;
-
-if (!mercadoPagoPublicKey) {
-
-    throw new Error(
-        "VITE_MERCADO_PAGO_PUBLIC_KEY não configurada."
-    );
-
-}
-
-if (!window.MercadoPago) {
-
-    throw new Error(
-        "SDK do Mercado Pago não carregado."
-    );
-
-}
-
-const mpRef = useRef(
-    new window.MercadoPago(
-        mercadoPagoPublicKey
-    )
-);
-
-const mp = mpRef.current;
-
-const [checkoutStep, setCheckoutStep] = useState<
-    | "checkout"
-    | "loading"
-    | "create-account"
-    | "success"
-    | "error"
->("checkout");
-
-if (!plan) {
-
-    return (
-        <Navigate
-            to="/pricing"
-            replace
-        />
-    );
-
-}
-
-async function generateCardToken() {
-
-    if (
-        !cardHolder.trim() ||
-        !email.trim() ||
-        !cpf.trim() ||
-        !cardNumber.trim() ||
-        !cardHolderName.trim() ||
-        !cardExpiry.trim() ||
-        !cardCvv.trim()
-    ) {
-
-        setCheckoutError(
-            "Preencha todos os campos para continuar."
-        );
-
-        return;
-
-    }
-
-    setCheckoutError("");
-
-    const customerName =
-        cardHolder.trim();
-
-    if (customerName.length < 3) {
-
-        setCheckoutError(
-            "Digite seu nome completo."
-        );
-
-        return;
-
-    }
-
-    const emailRegex =
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!emailRegex.test(email.trim())) {
-
-        setCheckoutError(
-            "Digite um e-mail válido."
-        );
-
-        return;
-
-    }
-
-    if (!isValidCpf(cpf)) {
-
-        setCheckoutError(
-            "Digite um CPF válido."
-        );
-
-        return;
-
-    }
-
-    const cardNumbers =
-        cardNumber.replace(/\D/g, "");
-
-    if (cardNumbers.length !== 16) {
-
-        setCheckoutError(
-            "Digite um número de cartão válido."
-        );
-
-        return;
-
-    }
-
-    const holderName =
-        cardHolderName.trim();
-
-    if (holderName.length < 3) {
-
-        setCheckoutError(
-            "Digite o nome do titular do cartão."
-        );
-
-        return;
-
-    }
-
-    const [expiryMonth, expiryYear] =
-        cardExpiry.split("/");
-
-    const monthNumber =
-        Number(expiryMonth);
-
-    const yearNumber =
-        Number(`20${expiryYear}`);
-
-    if (
-        !expiryMonth ||
-        !expiryYear ||
-        expiryMonth.length !== 2 ||
-        expiryYear.length !== 2 ||
-        monthNumber < 1 ||
-        monthNumber > 12
-    ) {
-
-        setCheckoutError(
-            "Digite uma validade de cartão válida."
-        );
-
-        return;
-
-    }
-
-    const currentDate = new Date();
-
-    const currentMonth =
-        currentDate.getMonth() + 1;
-
-    const currentYear =
-        currentDate.getFullYear();
-
-    if (
-        yearNumber < currentYear ||
-        (
-            yearNumber === currentYear &&
-            monthNumber < currentMonth
-        )
-    ) {
-
-        setCheckoutError(
-            "Este cartão está vencido."
-        );
-
-        return;
-
-    }
-
-    const cvvNumbers =
-        cardCvv.replace(/\D/g, "");
-
-    if (cvvNumbers.length !== 3) {
-
-        setCheckoutError(
-            "Digite um CVV válido."
-        );
-
-        return;
-
-    }
-
-    if (processingPayment) {
-        return;
-    }
-
-    setProcessingPayment(true);
-
-    setCheckoutStep("loading");
-
-    try {
-
-        const [month, year] = cardExpiry.split("/");
-
-        const tokenResponse = await mp.createCardToken({
-
-            cardNumber:
-                cardNumber.replace(/\s/g, ""),
-
-            cardholderName:
-                cardHolderName,
-
-            identificationType:
-                "CPF",
-
-            identificationNumber:
-                cpf.replace(/\D/g, ""),
-
-            securityCode:
-                cardCvv,
-
-            cardExpirationMonth:
-                month,
-
-            cardExpirationYear:
-                `20${year}`,
-
-        });
-
-        if (!tokenResponse?.id) {
-
-            throw new Error(
-                "Token do cartão não foi gerado."
-            );
-
-        }
-
-        const currentUser = auth.currentUser;
-
-        if (!currentUser) {
-            throw new Error(
-                "Usuário não autenticado."
-            );
-        }
-
-        const response = await createSubscription({
-            user_id: currentUser.uid,
-            token: tokenResponse.id,
-            email,
-            cpf: cpf.replace(/\D/g, ""),
-            card_holder: cardHolder,
-            plan_id: plan.id,
-        });
-
-
-        if (
-            !response ||
-            typeof response.user_exists !== "boolean"
-        ) {
-
-            throw new Error(
-                "Resposta inválida ao criar assinatura."
-            );
-
-        }
-
-        setSubscriptionResponse(response);
-
-
-        if (response.user_exists) {
-
-            if (!response.custom_token) {
-
-                throw new Error(
-                    "Token de autenticação não recebido."
-                );
-
-            }
-
-            await signInWithCustomToken(
-                auth,
-                response.custom_token
-            );
-
-            setCheckoutStep("success");
-
-        } else {
-
-            if (!response.subscription_id) {
-
-                throw new Error(
-                    "Assinatura não retornada pelo servidor."
-                );
-
-            }
-
-            setCheckoutStep("create-account");
-
-        }
-
-    } catch {
-
-        setProcessingPayment(false);
-
-        setCheckoutStep("error");
-
-    }
-
+    const firstDigit = calculateDigit(numbers.slice(0, 9), 10);
+    if (firstDigit !== Number(numbers[9])) return false;
+    return calculateDigit(numbers.slice(0, 10), 11) === Number(numbers[10]);
 }
 
 function formatCPF(value: string) {
-
     return value
-
         .replace(/\D/g, "")
-
         .slice(0, 11)
-
         .replace(/(\d{3})(\d)/, "$1.$2")
-
         .replace(/(\d{3})(\d)/, "$1.$2")
-
         .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-
 }
 
 function formatCardHolder(value: string) {
-
     return value
-
         .replace(/[^a-zA-ZÀ-ÿ\s]/g, "")
-
         .replace(/\s+/g, " ")
-
         .trimStart();
-
 }
 
-if (checkoutStep === "loading") {
+function isValidCardNumber(value: string) {
+    const digits = value.replace(/\D/g, "");
+    if (digits.length < 13 || digits.length > 19) return false;
 
-    return (
+    let sum = 0;
+    let doubleDigit = false;
+    for (let index = digits.length - 1; index >= 0; index--) {
+        let digit = Number(digits[index]);
+        if (doubleDigit) {
+            digit *= 2;
+            if (digit > 9) digit -= 9;
+        }
+        sum += digit;
+        doubleDigit = !doubleDigit;
+    }
+    return sum % 10 === 0;
+}
 
-        <main className="checkout">
+export default function Checkout() {
+    const location = useLocation();
+    const selectedPackage = location.state?.plan as Plan | undefined;
 
-            <div className="checkout-loading">
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
+    const [cpf, setCpf] = useState("");
+    const [cardHolderName, setCardHolderName] = useState("");
+    const [cardNumber, setCardNumber] = useState("");
+    const [cardExpiry, setCardExpiry] = useState("");
+    const [cardCvv, setCardCvv] = useState("");
+    const [pixState, setPixState] = useState<PixState>(INITIAL_PIX_STATE);
+    const [cardState, setCardState] = useState<CardState>(INITIAL_CARD_STATE);
+    const [copyFeedback, setCopyFeedback] = useState(false);
+    const pixRequestInFlight = useRef(false);
+    const cardRequestInFlight = useRef(false);
+    const mercadoPagoRef = useRef<MercadoPagoInstance | null>(null);
 
-                <div className="checkout-loading-spinner" />
-
-                <h2>Processando assinatura...</h2>
-
-                <p>
-
-                    Estamos processando seu pagamento.
-
-                    Não feche esta página.
-
-                </p>
-
-            </div>
-
-        </main>
-
+    const isPixLoading = [
+        "creating_topup",
+        "creating_attempt",
+        "creating_order",
+    ].includes(pixState.stage);
+    const hasActivePix = pixState.stage === "waiting_payment";
+    const isCardSubmitting = [
+        "creating_topup",
+        "creating_attempt",
+        "tokenizing",
+    ].includes(cardState.stage) || (
+        cardState.stage === "processing" && !cardState.orderId
     );
-
-}
-
-if (checkoutStep === "error") {
-
-    return (
-
-        <main className="checkout">
-
-            <div className="checkout-error">
-
-                <div className="checkout-error-icon">
-
-                    <X
-                        size={38}
-                        strokeWidth={2.5}
-                    />
-
-                </div>
-
-                <h2>
-
-                    Não foi possível concluir sua assinatura
-
-                </h2>
-
-                <p>
-
-                    Ocorreu um erro durante o processamento do pagamento.
-
-                </p>
-
-                <button
-                    className="checkout-submit-button"
-                    onClick={() => {
-
-                        setCheckoutError("");
-
-                        setCheckoutStep("checkout");
-
-                    }}
-                >
-                    Tentar novamente
-                </button>
-
-            </div>
-
-        </main>
-
+    const hasActiveCard = cardState.stage === "approved" || (
+        cardState.stage === "processing" && Boolean(cardState.orderId)
     );
-
-}
-
-if (checkoutStep === "success") {
-
-    return (
-
-        <main className="checkout">
-
-            <div className="checkout-success">
-
-
-                <div className="checkout-success-icon">
-
-                    <Check
-                        size={38}
-                        strokeWidth={2.5}
-                    />
-
-                </div>
-
-                <h2>
-
-                    Assinatura ativada!
-
-                </h2>
-
-                <p>
-
-                    Seu pagamento foi aprovado com sucesso.
-
-                </p>
-
-                <button
-                    className="checkout-submit-button"
-                    onClick={() => navigate("/")}
-                >
-                    Voltar para o início
-                </button>
-
-            </div>
-
-        </main>
-
-    );
-
-}
-
-if (checkoutStep === "create-account") {
-
-    return (
-
-        <main className="checkout">
-
-            <div className="checkout-account-page">
-
-                <div className="checkout-account-icon">
-
-                    <LockKeyhole size={38}/>
-
-                </div>
-
-
-                <h2>
-                    Crie sua senha
-                </h2>
-
-
-                <p>
-
-                    Seu pagamento foi aprovado.
-                    Agora falta apenas criar sua senha para finalizar sua conta Xia.
-
-                </p>
-
-
-                <div className="checkout-field">
-
-                    <label>
-                        Senha
-                    </label>
-
-
-                    <div className="checkout-password-wrapper">
-
-                        <input
-                            type={
-                                showPassword
-                                ? "text"
-                                : "password"
-                            }
-                            placeholder="Digite sua senha"
-                            value={password}
-                            onChange={(e)=>{
-
-                                setPassword(e.target.value);
-
-                                setPasswordError("");
-
-                            }}
-                        />
-
-
-                        <button
-                            type="button"
-                            className="checkout-eye-button"
-                            onClick={()=>setShowPassword(!showPassword)}
-                        >
-
-                            {
-                                showPassword
-                                ?
-                                <EyeOff size={20}/>
-                                :
-                                <Eye size={20}/>
-                            }
-
-                        </button>
-
-                    </div>
-
-                </div>
-
-
-                {passwordError && (
-
-                    <p className="checkout-error-message">
-                        {passwordError}
-                    </p>
-
-                )}
-
-
-
-                <div className="checkout-field">
-
-                    <label>
-                        Confirmar senha
-                    </label>
-
-
-                    <div className="checkout-password-wrapper">
-
-                        <input
-                            type={
-                                showConfirmPassword
-                                ?
-                                "text"
-                                :
-                                "password"
-                            }
-                            placeholder="Confirme sua senha"
-                            value={confirmPassword}
-                            onChange={(e)=>{
-
-                                setConfirmPassword(e.target.value);
-
-                                setConfirmPasswordError("");
-
-                            }}
-                        />
-
-
-                        <button
-                            type="button"
-                            className="checkout-eye-button"
-                            onClick={()=>setShowConfirmPassword(!showConfirmPassword)}
-                        >
-
-                            {
-                                showConfirmPassword
-                                ?
-                                <EyeOff size={20}/>
-                                :
-                                <Eye size={20}/>
-                            }
-
-                        </button>
-
-                    </div>
-
-                </div>
-
-
-                {confirmPasswordError && (
-
-                    <p className="checkout-error-message">
-                        {confirmPasswordError}
-                    </p>
-
-                )}
-
-
-
-                <button
-                    className="checkout-submit-button"
-                    onClick={handleCreateAccount}
-                    disabled={creatingAccount}
-                >
-
-                    {
-                        creatingAccount
-                        ?
-                        "Criando conta..."
-                        :
-                        "Criar conta"
-                    }
-
-                </button>
-
-
-            </div>
-
-        </main>
-
-    );
-
-}
-
-async function handleCreateAccount() {
-
-    if (creatingAccount) {
-        return;
+    const isPaymentMethodLocked = isPixLoading || hasActivePix ||
+        isCardSubmitting || hasActiveCard;
+
+    if (!selectedPackage) return <Navigate to="/pricing" replace />;
+    const packageId = selectedPackage.id;
+
+    function selectPaymentMethod(method: PaymentMethod) {
+        setPaymentMethod(method);
+        if (method === "card" && cardState.stage === "error") {
+            setCardState((current) => ({ ...current, error: "" }));
+        }
     }
 
-    setPasswordError("");
-    setConfirmPasswordError("");
+    async function handleGeneratePix() {
+        if (pixRequestInFlight.current || isPixLoading || hasActivePix) return;
+        pixRequestInFlight.current = true;
 
-    if (password.length < 6) {
+        let topupId = pixState.topupId;
+        let paymentAttemptId = pixState.paymentAttemptId;
 
-        setPasswordError(
-            "A senha deve conter pelo menos 6 caracteres."
-        );
+        try {
+            if (!topupId) {
+                setPixState((current) => ({
+                    ...current,
+                    stage: "creating_topup",
+                    error: "",
+                }));
+                const topup = await createTopup(packageId);
+                if (!topup.topup_id) throw new Error("invalid_topup_response");
+                topupId = topup.topup_id;
+                setPixState((current) => ({
+                    ...current,
+                    topupId,
+                }));
+            }
 
-        return;
+            if (!paymentAttemptId) {
+                setPixState((current) => ({
+                    ...current,
+                    stage: "creating_attempt",
+                }));
+                const attempt = await createPaymentAttempt(topupId, "pix");
+                if (
+                    !attempt.payment_attempt_id ||
+                    attempt.topup_id !== topupId
+                ) {
+                    throw new Error("invalid_attempt_response");
+                }
+                paymentAttemptId = attempt.payment_attempt_id;
+                setPixState((current) => ({
+                    ...current,
+                    paymentAttemptId,
+                }));
+            }
 
+            setPixState((current) => ({
+                ...current,
+                stage: "creating_order",
+            }));
+            const order = await createPixOrder(topupId, paymentAttemptId);
+
+            if (
+                !order.order_id || !order.qr_code || !order.qr_code_base64 ||
+                order.topup_id !== topupId ||
+                order.payment_attempt_id !== paymentAttemptId
+            ) {
+                throw new Error("invalid_pix_response");
+            }
+
+            setPixState({
+                stage: "waiting_payment",
+                topupId,
+                paymentAttemptId,
+                orderId: order.order_id,
+                status: order.status,
+                statusDetail: order.status_detail,
+                qrCode: order.qr_code,
+                qrCodeBase64: order.qr_code_base64,
+                ticketUrl: order.ticket_url,
+                expiresAt: order.expires_at,
+                error: "",
+            });
+        } catch {
+            pixRequestInFlight.current = false;
+            setPixState((current) => ({
+                ...current,
+                stage: "error",
+                error: "Não foi possível gerar o Pix. Tente novamente.",
+            }));
+        }
     }
 
-    if (password !== confirmPassword) {
+    async function handleCopyPixCode() {
+        if (!pixState.qrCode) return;
 
-        setConfirmPasswordError(
-            "As senhas não coincidem."
-        );
-
-        return;
-
+        try {
+            await navigator.clipboard.writeText(pixState.qrCode);
+            setCopyFeedback(true);
+            window.setTimeout(() => setCopyFeedback(false), 2000);
+        } catch {
+            setPixState((current) => ({
+                ...current,
+                error: "Não foi possível copiar o código automaticamente.",
+            }));
+        }
     }
 
-    if (!subscriptionResponse?.subscription_id) {
+    function validateCardForm() {
+        setCardState((current) => ({ ...current, error: "" }));
 
-        setPasswordError(
-            "Não foi possível localizar os dados da assinatura."
-        );
-
-        return;
-
-    }
-
-    try {
-
-        setCreatingAccount(true);
-
-        const userCredential =
-            await createUserWithEmailAndPassword(
-                auth,
-                email,
-                password
-            );
-
-        await createUserDocument(
-            userCredential.user
-        );
-
-
-        await linkSubscription({
-
-            firebase_uid:
-                userCredential.user.uid,
-
-            email,
-
-            subscription_id:
-                subscriptionResponse.subscription_id
-
-        });
-
-
-        setCheckoutStep("success");
-
-    } catch (error) {
-
-        const authError = error as FirebaseError;
-
-        switch (authError.code) {
-
-            case "auth/email-already-in-use":
-
-                setPasswordError(
-                    "Este e-mail já possui uma conta."
-                );
-
-                break;
-
-            default:
-
-                setPasswordError(
-                    "Não foi possível criar a conta."
-                );
-
-                break;
-
+        if (
+            !cpf.trim() || !cardNumber.trim() || !cardHolderName.trim() ||
+            !cardExpiry.trim() || !cardCvv.trim()
+        ) {
+            setCardState((current) => ({
+                ...current,
+                stage: "error",
+                error: "Preencha todos os campos para continuar.",
+                retryAllowed: true,
+            }));
+            return false;
+        }
+        if (!isValidCpf(cpf)) {
+            setCardState((current) => ({
+                ...current,
+                stage: "error",
+                error: "Digite um CPF válido.",
+                retryAllowed: true,
+            }));
+            return false;
+        }
+        if (!isValidCardNumber(cardNumber)) {
+            setCardState((current) => ({
+                ...current,
+                stage: "error",
+                error: "Digite um número de cartão válido.",
+                retryAllowed: true,
+            }));
+            return false;
+        }
+        if (cardHolderName.trim().length < 3) {
+            setCardState((current) => ({
+                ...current,
+                stage: "error",
+                error: "Digite o nome do titular do cartão.",
+                retryAllowed: true,
+            }));
+            return false;
         }
 
-    } finally {
+        const [expiryMonth, expiryYear] = cardExpiry.split("/");
+        const monthNumber = Number(expiryMonth);
+        const yearNumber = Number(`20${expiryYear}`);
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1;
+        const currentYear = currentDate.getFullYear();
 
-        setCreatingAccount(false);
+        if (
+            !expiryMonth || !expiryYear || expiryMonth.length !== 2 ||
+            expiryYear.length !== 2 || monthNumber < 1 || monthNumber > 12
+        ) {
+            setCardState((current) => ({
+                ...current,
+                stage: "error",
+                error: "Digite uma validade de cartão válida.",
+                retryAllowed: true,
+            }));
+            return false;
+        }
+        if (
+            yearNumber < currentYear ||
+            (yearNumber === currentYear && monthNumber < currentMonth)
+        ) {
+            setCardState((current) => ({
+                ...current,
+                stage: "error",
+                error: "Este cartão está vencido.",
+                retryAllowed: true,
+            }));
+            return false;
+        }
+        const cvvLength = cardCvv.replace(/\D/g, "").length;
+        if (cvvLength < 3 || cvvLength > 4) {
+            setCardState((current) => ({
+                ...current,
+                stage: "error",
+                error: "Digite um CVV válido.",
+                retryAllowed: true,
+            }));
+            return false;
+        }
 
+        return true;
     }
 
-}
+    function getMercadoPago() {
+        if (mercadoPagoRef.current) return mercadoPagoRef.current;
+
+        const publicKey = import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY;
+        if (!publicKey || !window.MercadoPago) {
+            throw new Error("mercado_pago_unavailable");
+        }
+
+        mercadoPagoRef.current = new window.MercadoPago(publicKey, {
+            locale: "pt-BR",
+        });
+        return mercadoPagoRef.current;
+    }
+
+    async function handleCardPayment() {
+        if (
+            cardRequestInFlight.current || isCardSubmitting || hasActiveCard ||
+            !validateCardForm()
+        ) return;
+
+        cardRequestInFlight.current = true;
+        let topupId = cardState.topupId;
+        let paymentAttemptId = cardState.paymentAttemptId;
+        let orderSubmissionStarted = false;
+        let tokenCreated = false;
+
+        try {
+            if (!topupId) {
+                setCardState((current) => ({
+                    ...current,
+                    stage: "creating_topup",
+                    error: "",
+                }));
+                const topup = await createTopup(packageId);
+                if (!topup.topup_id) throw new Error("invalid_topup_response");
+                topupId = topup.topup_id;
+                setCardState((current) => ({ ...current, topupId }));
+            }
+
+            if (!paymentAttemptId) {
+                setCardState((current) => ({
+                    ...current,
+                    stage: "creating_attempt",
+                }));
+                const attempt = await createPaymentAttempt(topupId, "card");
+                if (
+                    !attempt.payment_attempt_id || attempt.topup_id !== topupId ||
+                    attempt.payment_method !== "card"
+                ) {
+                    throw new Error("invalid_attempt_response");
+                }
+                paymentAttemptId = attempt.payment_attempt_id;
+                setCardState((current) => ({
+                    ...current,
+                    paymentAttemptId,
+                }));
+            }
+
+            setCardState((current) => ({ ...current, stage: "tokenizing" }));
+            const mercadoPago = getMercadoPago();
+            const rawCardNumber = cardNumber.replace(/\D/g, "");
+            const paymentMethods = await mercadoPago.getPaymentMethods({
+                bin: rawCardNumber.slice(0, 8),
+            });
+            const paymentMethod = paymentMethods.results.find(
+                (method) => method.payment_type_id === "credit_card"
+            );
+            if (!paymentMethod?.id) {
+                throw new Error("unsupported_payment_method");
+            }
+
+            const [expirationMonth, expirationYear] = cardExpiry.split("/");
+            const cardToken = await mercadoPago.createCardToken({
+                cardNumber: rawCardNumber,
+                cardholderName: cardHolderName.trim(),
+                identificationType: "CPF",
+                identificationNumber: cpf.replace(/\D/g, ""),
+                securityCode: cardCvv,
+                cardExpirationMonth: expirationMonth,
+                cardExpirationYear: expirationYear,
+            });
+            if (!cardToken.id) throw new Error("invalid_card_token");
+            tokenCreated = true;
+
+            setCardState((current) => ({ ...current, stage: "processing" }));
+            orderSubmissionStarted = true;
+            const order = await createCardOrder(topupId, paymentAttemptId, {
+                card_token: cardToken.id,
+                payment_method_id: paymentMethod.id,
+                installments: 1,
+                identification_type: "CPF",
+                identification_number: cpf.replace(/\D/g, ""),
+            });
+            if (
+                !order.order_id || order.topup_id !== topupId ||
+                order.payment_attempt_id !== paymentAttemptId
+            ) {
+                throw new Error("invalid_card_order_response");
+            }
+
+            const approved = order.status === "processed" &&
+                order.status_detail === "accredited";
+            const rejected = ["failed", "rejected", "cancelled", "canceled"]
+                .includes(order.status);
+            setCardState({
+                stage: approved ? "approved" : rejected ? "rejected" : "processing",
+                topupId,
+                paymentAttemptId,
+                orderId: order.order_id,
+                status: order.status,
+                statusDetail: order.status_detail,
+                error: "",
+                retryAllowed: rejected,
+            });
+        } catch {
+            setCardState((current) => ({
+                ...current,
+                stage: "error",
+                topupId,
+                paymentAttemptId,
+                error: orderSubmissionStarted
+                    ? "Não foi possível confirmar o resultado do pagamento."
+                    : "Não foi possível processar os dados do cartão. Tente novamente.",
+                retryAllowed: !orderSubmissionStarted,
+            }));
+        } finally {
+            if (tokenCreated) {
+                setCardNumber("");
+                setCardExpiry("");
+                setCardCvv("");
+            }
+            cardRequestInFlight.current = false;
+        }
+    }
+
+    function startNewCardAttempt() {
+        if (!cardState.retryAllowed || isCardSubmitting) return;
+        setCardState((current) => ({
+            ...INITIAL_CARD_STATE,
+            topupId: current.topupId,
+        }));
+    }
 
     return (
-
         <main className="checkout">
-
             <div className="checkout-container">
-
                 <header className="checkout-header">
-
                     <h1 className="checkout-title">
-
-                        Finalizar <span>Assinatura</span>
-
+                        Finalizar <span>recarga</span>
                     </h1>
-
                     <p className="checkout-description">
-
-                        Complete seus dados para ativar sua assinatura da Xia através de um pagamento seguro com Mercado Pago.
-
+                        Escolha a forma de pagamento e conclua sua compra de créditos.
                     </p>
-
                 </header>
 
-
                 <section className="checkout-layout">
-
                     <div className="checkout-form-card">
-
-                        <h2 className="checkout-card-title">
-
-                            Dados do pagamento
-
-                        </h2>
-
+                        <h2 className="checkout-card-title">Forma de pagamento</h2>
                         <p className="checkout-card-description">
-
-                            Informe os dados do titular e do cartão para ativar sua assinatura.
-
+                            Selecione como deseja pagar por esta recarga.
                         </p>
 
-                        <div className="checkout-form">
-
-                            <div className="checkout-field">
-
-                                <label>Nome completo</label>
-
-                                <input
-                                    type="text"
-                                    placeholder="Digite o nome do titular"
-                                    value={cardHolder}
-                                    onChange={(e) => setCardHolder(formatCardHolder(e.target.value.toUpperCase()))}
-                                />
-
-                            </div>
-
-                            <div className="checkout-field">
-
-                                <label>E-mail</label>
-
-                                <input
-                                    type="email"
-                                    placeholder="Digite seu e-mail"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    disabled={Boolean(auth.currentUser?.email)}
-                                    className={
-                                        auth.currentUser?.email
-                                            ? "checkout-input checkout-input-locked"
-                                            : "checkout-input"
-                                    }
-                                />
-
-                            </div>
-
-                            <div className="checkout-field">
-
-                                <label>CPF</label>
-
-                                    <input
-                                        type="text"
-                                        placeholder="000.000.000-00"
-                                        value={cpf}
-                                        onChange={(e) => setCpf(formatCPF(e.target.value))}
-                                    />
-
-                            </div>
-
-
-                            <h3 className="checkout-section-title">
-
-                                Dados do cartão
-
-                            </h3>
-
-                            <div className="checkout-field">
-
-                                <label>Número do cartão</label>
-
-                                <input
-                                    type="text"
-                                    placeholder="1234 5678 9012 3456"
-                                    value={cardNumber}
-                                    onChange={(e) => {
-
-                                        const value =
-                                            e.target.value
-                                                .replace(/\D/g, "")
-                                                .slice(0, 16);
-
-                                        const formatted =
-                                            value.replace(
-                                                /(\d{4})(?=\d)/g,
-                                                "$1 "
-                                            );
-
-                                        setCardNumber(formatted);
-
-                                    }}
-                                />
-
-                            </div>
-
-                            <div className="checkout-field">
-
-                                <label>Nome impresso no cartão</label>
-
-                                <input
-                                    type="text"
-                                    placeholder="Nome igual ao cartão"
-                                    value={cardHolderName}
-                                    onChange={(e) => setCardHolderName(formatCardHolder(e.target.value.toUpperCase()))}
-                                />
-
-                            </div>
-
-                            <div className="checkout-field-row">
-
-                                 <div className="checkout-field">
-
-                                    <label>Validade</label>
-
-                                    <input
-                                        type="text"
-                                        placeholder="MM/AA"
-                                        value={cardExpiry}
-                                        onChange={(e) => {
-
-                                            const value =
-                                                e.target.value
-                                                    .replace(/\D/g, "")
-                                                    .slice(0, 4);
-
-                                            let formatted = value;
-
-                                            if (value.length >= 3) {
-
-                                                formatted =
-                                                    value.slice(0, 2) +
-                                                    "/" +
-                                                    value.slice(2);
-
-                                            }
-
-                                            setCardExpiry(formatted);
-
-                                        }}
-                                    />
-
-                                </div>
-
-                                <div className="checkout-field">
-
-                                    <label>CVV</label>
-
-                                    <input
-                                        type="text"
-                                        placeholder="123"
-                                        value={cardCvv}
-                                        onChange={(e) => {
-
-                                            const value =
-                                                e.target.value
-                                                    .replace(/\D/g, "")
-                                                    .slice(0, 3);
-
-                                            setCardCvv(value);
-
-                                        }}
-                                    />
-
-                                </div>
-
-                            </div>
-
-
-                            {checkoutError && (
-
-                                <p className="checkout-error-message">
-                                    {checkoutError}
-                                </p>
-
-                            )}
-
-
+                        <div
+                            className="checkout-payment-methods"
+                            role="tablist"
+                            aria-label="Forma de pagamento"
+                        >
                             <button
                                 type="button"
-                                className="checkout-submit-button"
-                                onClick={generateCardToken}
+                                role="tab"
+                                aria-selected={paymentMethod === "pix"}
+                                className={paymentMethod === "pix"
+                                    ? "checkout-payment-method checkout-payment-method-active"
+                                    : "checkout-payment-method"}
+                                disabled={isPaymentMethodLocked}
+                                onClick={() => selectPaymentMethod("pix")}
                             >
-                                Finalizar assinatura
+                                <QrCode size={22} /> Pix
                             </button>
-
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={paymentMethod === "card"}
+                                className={paymentMethod === "card"
+                                    ? "checkout-payment-method checkout-payment-method-active"
+                                    : "checkout-payment-method"}
+                                disabled={isPaymentMethodLocked}
+                                onClick={() => selectPaymentMethod("card")}
+                            >
+                                <CreditCard size={22} /> Cartão
+                            </button>
                         </div>
 
+                        {paymentMethod === "pix" ? (
+                            <div className="checkout-payment-content">
+                                {hasActivePix ? (
+                                    <div className="checkout-pix-payment">
+                                        <div className="checkout-pix-status">
+                                            <span className="checkout-pix-status-badge">
+                                                Aguardando pagamento
+                                            </span>
+                                            <p>
+                                                Seus créditos serão adicionados automaticamente
+                                                após a confirmação segura do pagamento.
+                                            </p>
+                                        </div>
+
+                                        <img
+                                            className="checkout-pix-qr-code"
+                                            src={`data:image/png;base64,${pixState.qrCodeBase64}`}
+                                            alt="QR Code Pix para pagamento"
+                                        />
+
+                                        <div className="checkout-pix-copy">
+                                            <label htmlFor="pix-copy-code">
+                                                Pix copia e cola
+                                            </label>
+                                            <div className="checkout-pix-copy-row">
+                                                <input
+                                                    id="pix-copy-code"
+                                                    value={pixState.qrCode ?? ""}
+                                                    readOnly
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleCopyPixCode}
+                                                >
+                                                    {copyFeedback ? "Copiado!" : "Copiar código"}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {pixState.expiresAt === "PT24H" && (
+                                            <p className="checkout-pix-expiration">
+                                                Este Pix expira em até 24 horas.
+                                            </p>
+                                        )}
+
+                                        {pixState.ticketUrl && (
+                                            <a
+                                                className="checkout-pix-ticket-link"
+                                                href={pixState.ticketUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                            >
+                                                Abrir pagamento Pix
+                                            </a>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="checkout-pix-info">
+                                            <div className="checkout-pix-icon">
+                                                {isPixLoading
+                                                    ? <span className="checkout-pix-spinner" />
+                                                    : <Zap size={30} />}
+                                            </div>
+                                            <div>
+                                                <h3>
+                                                    {isPixLoading
+                                                        ? "Gerando seu Pix..."
+                                                        : "Pagamento instantâneo com Pix"}
+                                                </h3>
+                                                <p>
+                                                    {isPixLoading
+                                                        ? "Aguarde enquanto preparamos o QR Code."
+                                                        : "O QR Code e o código copia e cola serão gerados no próximo passo."}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="checkout-submit-button"
+                                            disabled={isPixLoading}
+                                            onClick={handleGeneratePix}
+                                        >
+                                            {isPixLoading ? "Gerando seu Pix..." : (
+                                                pixState.stage === "error"
+                                                    ? "Tentar gerar Pix novamente"
+                                                    : "Gerar Pix"
+                                            )}
+                                        </button>
+                                    </>
+                                )}
+
+                                {pixState.error && (
+                                    <p className="checkout-error-message">
+                                        {pixState.error}
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="checkout-payment-content">
+                                {auth.currentUser?.email && (
+                                    <div className="checkout-account-info">
+                                        <span>Conta</span>
+                                        <strong>{auth.currentUser.email}</strong>
+                                    </div>
+                                )}
+
+                                {cardState.orderId && [
+                                    "approved",
+                                    "rejected",
+                                    "processing",
+                                ].includes(cardState.stage) ? (
+                                    <div className={`checkout-card-result checkout-card-result-${cardState.stage}`}>
+                                        <CreditCard size={34} />
+                                        <h3>
+                                            {cardState.stage === "approved"
+                                                ? "Pagamento aprovado"
+                                                : cardState.stage === "rejected"
+                                                    ? "Pagamento recusado"
+                                                    : "Pagamento em processamento"}
+                                        </h3>
+                                        <p>
+                                            {cardState.stage === "approved"
+                                                ? "Pagamento aprovado. Confirmando créditos..."
+                                                : cardState.stage === "rejected"
+                                                    ? "Não foi possível aprovar este cartão. Confira os dados ou tente outro cartão."
+                                                    : "Recebemos o pagamento e estamos confirmando o resultado com segurança."}
+                                        </p>
+                                        {cardState.stage === "rejected" && (
+                                            <button
+                                                type="button"
+                                                className="checkout-submit-button"
+                                                onClick={startNewCardAttempt}
+                                            >
+                                                Tentar novamente
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : <div className="checkout-form">
+                                    <div className="checkout-field">
+                                        <label>CPF</label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            placeholder="000.000.000-00"
+                                            value={cpf}
+                                            onChange={(event) =>
+                                                setCpf(formatCPF(event.target.value))}
+                                        />
+                                    </div>
+
+                                    <h3 className="checkout-section-title">Dados do cartão</h3>
+
+                                    <div className="checkout-field">
+                                        <label>Número do cartão</label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            placeholder="1234 5678 9012 3456"
+                                            value={cardNumber}
+                                            onChange={(event) => {
+                                                const value = event.target.value
+                                                    .replace(/\D/g, "").slice(0, 19);
+                                                setCardNumber(
+                                                    value.replace(/(\d{4})(?=\d)/g, "$1 ")
+                                                );
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="checkout-field">
+                                        <label>Nome impresso no cartão</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Nome igual ao cartão"
+                                            value={cardHolderName}
+                                            onChange={(event) => setCardHolderName(
+                                                formatCardHolder(
+                                                    event.target.value.toUpperCase()
+                                                )
+                                            )}
+                                        />
+                                    </div>
+
+                                    <div className="checkout-field-row">
+                                        <div className="checkout-field">
+                                            <label>Validade</label>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                placeholder="MM/AA"
+                                                value={cardExpiry}
+                                                onChange={(event) => {
+                                                    const value = event.target.value
+                                                        .replace(/\D/g, "").slice(0, 4);
+                                                    setCardExpiry(value.length >= 3
+                                                        ? `${value.slice(0, 2)}/${value.slice(2)}`
+                                                        : value);
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="checkout-field">
+                                            <label>CVV</label>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                placeholder="123"
+                                                value={cardCvv}
+                                                onChange={(event) => setCardCvv(
+                                                    event.target.value
+                                                        .replace(/\D/g, "").slice(0, 4)
+                                                )}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className="checkout-submit-button"
+                                        disabled={
+                                            isCardSubmitting ||
+                                            (cardState.stage === "error" &&
+                                                !cardState.retryAllowed)
+                                        }
+                                        onClick={handleCardPayment}
+                                    >
+                                        {cardState.stage === "creating_topup"
+                                            ? "Iniciando recarga..."
+                                            : cardState.stage === "creating_attempt"
+                                                ? "Preparando pagamento..."
+                                                : cardState.stage === "tokenizing"
+                                                    ? "Validando cartão..."
+                                                    : cardState.stage === "processing"
+                                                        ? "Processando pagamento..."
+                                                        : "Pagar com cartão"}
+                                    </button>
+                                </div>}
+
+                                {cardState.error && (
+                                    <p className="checkout-error-message">
+                                        {cardState.error}
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                   <aside className="checkout-summary-card">
-
-                        <h2 className="checkout-card-title">
-
-                            Resumo da assinatura
-
-                        </h2>
-
+                    <aside className="checkout-summary-card">
+                        <h2 className="checkout-card-title">Resumo da recarga</h2>
                         <p className="checkout-card-description">
-
-                            Confira as informações antes de finalizar o pagamento.
-
+                            Confira as informações do pacote selecionado.
                         </p>
-
-
                         <div className="checkout-summary">
-
                             <div className="checkout-summary-row">
-                                <span>Plano</span>
-                                <strong>{plan?.name}</strong>
+                                <span>Pacote</span>
+                                <strong>{selectedPackage.name}</strong>
                             </div>
-
                             <div className="checkout-summary-row">
                                 <span>Créditos</span>
-                                <strong>{plan?.credits}</strong>
+                                <strong>{selectedPackage.credits}</strong>
                             </div>
-
                             <div className="checkout-summary-divider" />
-
                             <div className="checkout-summary-total">
                                 <span>Total</span>
                                 <strong>
-                                    {plan?.price.toLocaleString("pt-BR", {
+                                    {selectedPackage.price.toLocaleString("pt-BR", {
                                         style: "currency",
                                         currency: "BRL",
                                     })}
                                 </strong>
                             </div>
-
                         </div>
-
                     </aside>
-
                 </section>
-
             </div>
-
-
-           
-
         </main>
-
     );
-
 }
-
-

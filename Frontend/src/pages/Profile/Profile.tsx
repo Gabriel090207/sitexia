@@ -25,7 +25,6 @@ import {
     User,
     Mail,
     KeyRound,
-    CreditCard,
     Coins,
     Trash2,
     CircleCheckBig,
@@ -35,10 +34,6 @@ import {
 import auth from "../../firebase/auth";
 import db from "../../firebase/firestore";
 import { useAuth } from "../../contexts/AuthContext";
-
-import {
-    cancelSubscription,
-} from "../../api/subscription";
 
 interface UserData {
 
@@ -50,15 +45,7 @@ interface UserData {
 
     photoURL: string;
 
-    plan: string;
-
-    credits: number;
-
-    subscription_status?: string;
-
-    subscription_next_payment?: string;
-
-    active_subscription?: string;
+    credits?: number;
 
 }
 
@@ -81,15 +68,6 @@ export default function Profile() {
         useState(false);
 
     const [closingModal, setClosingModal] = useState(false);
-
-    const [cancelSubscriptionModal, setCancelSubscriptionModal] =
-        useState(false);
-
-    const [closingCancelModal, setClosingCancelModal] =
-        useState(false);
-
-    const [cancelLoading, setCancelLoading] =
-        useState(false);
 
     const [toast, setToast] = useState({
         open: false,
@@ -216,96 +194,6 @@ export default function Profile() {
     }
 
 
-    async function handleCancelSubscription() {
-
-        if (!user || !userData?.active_subscription) {
-
-            return;
-
-        }
-
-        setCancelLoading(true);
-
-        try {
-
-            await cancelSubscription({
-
-                subscription_id:
-                    userData.active_subscription
-
-            });
-
-
-            setClosingCancelModal(true);
-
-            setTimeout(() => {
-
-                setCancelSubscriptionModal(false);
-
-                setClosingCancelModal(false);
-
-            }, 300);
-
-            showToast(
-
-                "Assinatura cancelada",
-
-                "Seu plano foi cancelado com sucesso.",
-
-                "success"
-
-            );
-
-
-            const snapshot = await getDoc(
-
-                doc(
-
-                    db,
-
-                    "users",
-
-                    user.uid
-
-                )
-
-            );
-
-            if (snapshot.exists()) {
-
-                setUserData(
-
-                    snapshot.data() as UserData
-
-                );
-
-            }
-
-        
-        } catch {
-
-            showToast(
-
-                "Erro",
-
-                "Não foi possível cancelar sua assinatura.",
-
-                "error"
-
-            );
-
-        }
-
-        finally {
-
-            setCancelLoading(false);
-
-        }
-
-        
-    }
-
-
     if (loading || loadingData) {
 
         return (
@@ -330,8 +218,7 @@ export default function Profile() {
 
     }
 
-    const isFreePlan =
-        userData.plan === "free";
+    const credits = userData.credits ?? 0;
 
 
     function closeDeleteModal() {
@@ -364,7 +251,7 @@ export default function Profile() {
 
                 <p>
 
-                    Gerencie sua conta e sua assinatura Xia.
+                    Gerencie sua conta e seus créditos Xia.
 
                 </p>
 
@@ -481,41 +368,9 @@ export default function Profile() {
 
                     <h2>
 
-                        Meu Plano
+                        Saldo de créditos
 
                     </h2>
-
-                    <div className="profile-item">
-
-                        <CreditCard size={38} />
-
-                        <div>
-
-                            <span>
-
-                                Plano Atual
-
-                            </span>
-
-                            <strong>
-
-                                {
-
-                                    isFreePlan ?
-
-                                        "Free"
-
-                                        :
-
-                                        userData.plan
-
-                                }
-
-                            </strong>
-
-                        </div>
-
-                    </div>
 
                     <div className="profile-item">
 
@@ -525,13 +380,13 @@ export default function Profile() {
 
                             <span>
 
-                                Créditos
+                                Saldo disponível
 
                             </span>
 
                             <strong>
 
-                                {userData.credits}
+                                {credits} {credits === 1 ? "crédito disponível" : "créditos disponíveis"}
 
                             </strong>
 
@@ -539,83 +394,24 @@ export default function Profile() {
 
                     </div>
 
-                    {
+                    {credits === 0 && (
 
-                        isFreePlan ?
+                        <p className="profile-plan-text">
 
-                            <>
+                            Seu saldo de créditos está zerado.
 
-                                <p className="profile-plan-text">
+                        </p>
 
-                                    Você ainda não possui um plano ativo.
+                    )}
 
-                                </p>
+                    <Link
+                        to="/pricing"
+                        className="profile-plan-button"
+                    >
 
-                                <Link
-                                    to="/pricing"
-                                    className="profile-plan-button"
-                                >
+                        Comprar créditos
 
-                                    Ver Planos
-
-                                </Link>
-
-                            </>
-
-                            :
-
-                            <>
-
-                                <div className="profile-item">
-
-                                    <div>
-
-                                        <span>
-
-                                            Próxima renovação
-
-                                        </span>
-
-                                        <strong>
-
-                                            {
-
-                                                userData.subscription_next_payment
-
-                                                    ?
-
-                                                    new Date(
-                                                        userData.subscription_next_payment
-                                                    ).toLocaleDateString(
-                                                        "pt-BR"
-                                                    )
-
-                                                    :
-
-                                                    "-"
-
-                                            }
-
-                                        </strong>
-
-                                    </div>
-
-                                </div>
-
-                                <button
-                                    className="profile-plan-button"
-                                    onClick={() =>
-                                        setCancelSubscriptionModal(true)
-                                    }
-                                >
-
-                                    Cancelar Assinatura
-
-                                </button>
-
-                            </>
-
-                    }
+                    </Link>
 
                 </section>
 
@@ -727,87 +523,6 @@ export default function Profile() {
 
             )
         }
-
-
-        {
-            cancelSubscriptionModal &&
-
-            <div
-                className={
-                    closingCancelModal
-                        ? "profile-modal-overlay profile-modal-overlay-close"
-                        : "profile-modal-overlay"
-                }
-            >
-
-                <div
-                    className={
-                        closingCancelModal
-                            ? "profile-modal profile-modal-close"
-                            : "profile-modal"
-                    }
-                >
-
-                    <h3>
-
-                        Cancelar assinatura
-
-                    </h3>
-
-                    <p>
-
-                        Ao cancelar sua assinatura você perderá imediatamente o acesso ao plano atual e seus créditos serão zerados. Esta ação não pode ser desfeita.
-
-                    </p>
-
-                    <div className="profile-modal-actions">
-
-                        <button
-                            className="profile-cancel"
-                            onClick={() => {
-
-                                setClosingCancelModal(true);
-
-                                setTimeout(() => {
-
-                                    setCancelSubscriptionModal(false);
-
-                                    setClosingCancelModal(false);
-
-                                }, 300);
-
-                            }}
-                        >
-
-                            Cancelar
-
-                        </button>
-
-                        <button
-                            className="profile-confirm"
-                            onClick={handleCancelSubscription}
-                            disabled={cancelLoading}
-                        >
-
-                            {
-
-                                cancelLoading
-
-                                    ? "Cancelando..."
-
-                                    : "Cancelar Assinatura"
-
-                            }
-
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-        }
-
     </main>
 
 );

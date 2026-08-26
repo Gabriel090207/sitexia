@@ -12,71 +12,9 @@ import {
 
 import { useNavigate } from "react-router-dom";
 
-import {
-    useEffect,
-    useState,
-} from "react";
-
-import {
-    doc,
-    getDoc,
-} from "firebase/firestore";
-
-import { useAuth } from "../../contexts/AuthContext";
-
-import db from "../../firebase/firestore";
-
 const Pricing = () => {
 
 const navigate = useNavigate();
-
-const { user } = useAuth();
-
-const [currentPlan, setCurrentPlan] =
-    useState("free");
-
-useEffect(() => {
-
-    async function loadUserPlan() {
-
-        if (!user) {
-            setCurrentPlan("free");
-            return;
-        }
-
-        const userRef = doc(
-            db,
-            "users",
-            user.uid
-        );
-
-        const snapshot = await getDoc(userRef);
-
-        if (snapshot.exists()) {
-
-            const userData = snapshot.data();
-
-            setCurrentPlan(
-                userData.subscription_plan_id || "free"
-            );
-
-        }
-
-    }
-
-    loadUserPlan();
-
-}, [user]);
-
-
-const isStarterCurrent =
-    currentPlan === "starter";
-
-const isProCurrent =
-    currentPlan === "pro";
-
-const isEnterpriseCurrent =
-    currentPlan === "enterprise";
 
     return (
 
@@ -87,12 +25,13 @@ const isEnterpriseCurrent =
                 <div className="pricing-header">
 
                     <h1 className="pricing-title">
-                        Escolha seu <span>Plano</span>
+                        Escolha seu <span>pacote de créditos</span>
                     </h1>
 
                     <p className="pricing-description">
                         Compre créditos para utilizar todas as ferramentas de IA da Xia.
-                        Escolha o plano ideal para sua necessidade e gere imagens, vídeos e face swaps com rapidez.
+                        Escolha a quantidade de créditos ideal para sua necessidade.
+                        Gere imagens, vídeos e face swaps com rapidez.
                     </p>
 
                 </div>
@@ -101,13 +40,7 @@ const isEnterpriseCurrent =
 
                     {/* STARTER */}
 
-                    <div
-                        className={
-                            isStarterCurrent
-                                ? "pricing-card pricing-card-current"
-                                : "pricing-card"
-                        }
-                    >
+                    <div className="pricing-card">
 
                         <span className="pricing-plan">
                             Starter
@@ -137,23 +70,11 @@ const isEnterpriseCurrent =
 
                             <li><Check size={16} /> Video Generation</li>
 
-                            <li><Check size={16} /> Suporte padrão</li>
-
                         </ul>
 
                         <button
-                            className={
-                                isStarterCurrent
-                                    ? "pricing-button pricing-button-current"
-                                    : "pricing-button"
-                            }
-                            disabled={isStarterCurrent}
+                            className="pricing-button"
                             onClick={() => {
-
-                                if (isStarterCurrent) {
-                                    return;
-                                }
-
                                 navigate("/checkout", {
                                     state: {
                                         plan: PLANS.find(
@@ -163,22 +84,14 @@ const isEnterpriseCurrent =
                                 });
                             }}
                         >
-                            {isStarterCurrent
-                                ? "Plano Atual"
-                                : "Comprar Agora"}
+                            Comprar créditos
                         </button>
 
                     </div>
 
                     {/* PRO */}
 
-                    <div
-                        className={
-                            isProCurrent
-                                ? "pricing-card pricing-featured pricing-card-current"
-                                : "pricing-card pricing-featured"
-                        }
-                    >
+                    <div className="pricing-card pricing-featured">
 
                         <span className="pricing-badge">
 
@@ -218,25 +131,11 @@ const isEnterpriseCurrent =
 
                             <li><Check size={16} /> Video Generation</li>
 
-                            <li><Check size={16} /> Prioridade na fila</li>
-
-                            <li><Check size={16} /> Suporte prioritário</li>
-
                         </ul>
 
                        <button
-                            className={
-                                isProCurrent
-                                    ? "pricing-button pricing-button-current"
-                                    : "pricing-button"
-                            }
-                            disabled={isProCurrent}
+                            className="pricing-button"
                             onClick={() => {
-
-                                if (isProCurrent) {
-                                    return;
-                                }
-
                                 navigate("/checkout", {
                                     state: {
                                         plan: PLANS.find(
@@ -246,22 +145,14 @@ const isEnterpriseCurrent =
                                 });
                             }}
                         >
-                            {isProCurrent
-                                ? "Plano Atual"
-                                : "Comprar Agora"}
+                            Comprar créditos
                         </button>
 
                     </div>
 
                     {/* ENTERPRISE */}
 
-                    <div
-                        className={
-                            isEnterpriseCurrent
-                                ? "pricing-card pricing-card-current"
-                                : "pricing-card"
-                        }
-                    >
+                    <div className="pricing-card">
 
                         <span className="pricing-plan">
 
@@ -293,25 +184,11 @@ const isEnterpriseCurrent =
 
                             <li><Check size={16} /> Video Generation</li>
 
-                            <li><Check size={16} /> Máxima prioridade</li>
-
-                            <li><Check size={16} /> Suporte VIP</li>
-
                         </ul>
 
                         <button
-                            className={
-                                isEnterpriseCurrent
-                                    ? "pricing-button pricing-button-current"
-                                    : "pricing-button"
-                            }
-                            disabled={isEnterpriseCurrent}
+                            className="pricing-button"
                             onClick={() => {
-
-                                if (isEnterpriseCurrent) {
-                                    return;
-                                }
-
                                 navigate("/checkout", {
                                     state: {
                                         plan: PLANS.find(
@@ -321,9 +198,7 @@ const isEnterpriseCurrent =
                                 });
                             }}
                         >
-                            {isEnterpriseCurrent
-                                ? "Plano Atual"
-                                : "Comprar Agora"}
+                            Comprar créditos
                         </button>
 
                     </div>

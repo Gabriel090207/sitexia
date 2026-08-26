@@ -11,6 +11,15 @@ export interface MercadoPagoConstructor {
 
 export interface MercadoPagoInstance {
 
+    getPaymentMethods(data: {
+        bin: string;
+    }): Promise<{
+        results: Array<{
+            id: string;
+            payment_type_id: string;
+        }>;
+    }>;
+
     createCardToken(data: {
         cardNumber: string;
         cardholderName: string;
@@ -19,7 +28,9 @@ export interface MercadoPagoInstance {
         securityCode: string;
         cardExpirationMonth: string;
         cardExpirationYear: string;
-    }): Promise<any>;
+    }): Promise<{
+        id: string;
+    }>;
 
 }
 
