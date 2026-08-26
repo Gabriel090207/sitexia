@@ -5,6 +5,8 @@ import mercadopago
 
 load_dotenv()
 
-subscription_sdk = mercadopago.SDK(
+mp_sdk = mercadopago.SDK(
     os.getenv("MERCADO_PAGO_ACCESS_TOKEN")
 )
+
+subscription_sdk = mp_sdk
