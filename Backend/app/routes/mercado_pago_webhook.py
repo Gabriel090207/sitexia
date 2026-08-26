@@ -114,6 +114,44 @@ def _decimal_amount(value: Any) -> Decimal | None:
     return amount if amount.is_finite() else None
 
 
+def _credit_amount(value: Any) -> int:
+    if isinstance(value, bool):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Quantidade de créditos da recarga inválida.",
+        )
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        amount = Decimal("NaN")
+    if not amount.is_finite() or amount <= 0 or amount != amount.to_integral():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Quantidade de créditos da recarga inválida.",
+        )
+    return int(amount)
+
+
+def _credit_balance(value: Any) -> int | float:
+    if value is None:
+        return 0
+    if isinstance(value, bool):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Saldo de créditos do usuário inválido.",
+        )
+    try:
+        balance = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        balance = Decimal("NaN")
+    if not balance.is_finite() or balance < 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Saldo de créditos do usuário inválido.",
+        )
+    return int(balance) if balance == balance.to_integral() else float(balance)
+
+
 def _normalized_status(order: dict[str, Any]) -> str | None:
     return ORDER_STATUS_MAP.get(
         (order.get("status"), order.get("status_detail"))
@@ -313,6 +351,87 @@ def reconcile_order_transaction(
     return internal_status
 
 
+@firestore.transactional
+def grant_topup_credits_once(
+    transaction,
+    topup_ref,
+    user_ref,
+    credit_transaction_ref,
+    expected_uid: str,
+    order_id: str,
+    payment_attempt_id: str,
+):
+    topup_snapshot = next(transaction.get(topup_ref))
+    user_snapshot = next(transaction.get(user_ref))
+    credit_transaction_snapshot = next(
+        transaction.get(credit_transaction_ref)
+    )
+
+    if not topup_snapshot.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recarga não encontrada.",
+        )
+    topup = topup_snapshot.to_dict()
+    if topup.get("uid") != expected_uid:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Usuário da recarga incompatível.",
+        )
+
+    if (
+        topup.get("credits_granted") is True
+        or credit_transaction_snapshot.exists
+    ):
+        return False
+
+    if not user_snapshot.exists:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Usuário da recarga não encontrado.",
+        )
+
+    if (
+        topup.get("status") != "approved"
+        or topup.get("status_detail") != "accredited"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A recarga não está aprovada para concessão de créditos.",
+        )
+
+    credits = _credit_amount(topup.get("credits"))
+    user = user_snapshot.to_dict()
+    balance_before = _credit_balance(user.get("credits"))
+    balance_after = balance_before + credits
+
+    transaction.update(user_ref, {"credits": balance_after})
+    transaction.create(
+        credit_transaction_ref,
+        {
+            "uid": expected_uid,
+            "type": "topup",
+            "amount": credits,
+            "topup_id": topup_ref.id,
+            "mercado_pago_order_id": order_id,
+            "payment_attempt_id": payment_attempt_id,
+            "package_id": topup.get("package_id"),
+            "balance_before": balance_before,
+            "balance_after": balance_after,
+            "created_at": firestore.SERVER_TIMESTAMP,
+        },
+    )
+    transaction.update(
+        topup_ref,
+        {
+            "credits_granted": True,
+            "credits_granted_at": firestore.SERVER_TIMESTAMP,
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        },
+    )
+    return True
+
+
 @router.post("/orders")
 async def mercado_pago_orders_webhook(request: Request):
     try:
@@ -404,6 +523,23 @@ async def mercado_pago_orders_webhook(request: Request):
         order_id,
         internal_status,
     )
+    if applied_status == "approved":
+        topup = topup_snapshot.to_dict()
+        uid = topup.get("uid")
+        if not isinstance(uid, str) or not uid:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Usuário da recarga inválido.",
+            )
+        grant_topup_credits_once(
+            db.transaction(),
+            topup_ref,
+            db.collection("users").document(uid),
+            db.collection("credit_transactions").document(topup_id),
+            uid,
+            order_id,
+            attempts[0].reference.id,
+        )
     return {
         "received": True,
         "status": applied_status,
