@@ -10,6 +10,7 @@ from app.routes.video_generation import router as video_generation_router
 from app.routes.image_generation import router as image_generation_router
 from app.routes.subscription import router as subscription_router
 from app.routes.download import router as download_router
+from app.routes.auth import router as auth_router
 
 app = FastAPI(
     title="Xia API",
@@ -51,3 +52,5 @@ app.include_router(image_generation_router)
 app.include_router(subscription_router)
 
 app.include_router(download_router)
+
+app.include_router(auth_router)
