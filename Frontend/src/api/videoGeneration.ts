@@ -1,170 +1,79 @@
-const API_URL =
-    import.meta.env.VITE_API_URL;
+import api from "./api";
 
 
 export async function createImageToVideo(
     imageUrl: string,
     prompt: string,
-    duration: number,
-    userId: string
+    duration: number
 ) {
-
-    const response = await fetch(
-        `${API_URL}/video-generation/image-to-video`,
+    const response = await api.post(
+        "/video-generation/image-to-video",
         {
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json",
-            },
-
-            body: JSON.stringify({
-                image_url: imageUrl,
-                prompt,
-                duration,
-                user_id: userId,
-            }),
+            image_url: imageUrl,
+            prompt,
+            duration,
         }
     );
-
-    if (!response.ok) {
-
-        throw new Error(
-            "Erro ao criar geração de vídeo."
-        );
-
-    }
-
-    return await response.json();
+    return response.data;
 }
 
 
 export async function getVideoTask(
     taskId: string
 ) {
-
-    const response = await fetch(
-        `${API_URL}/video-generation/task/${taskId}`
+    const response = await api.get(
+        `/video-generation/task/${taskId}`
     );
-
-    if (!response.ok) {
-
-        throw new Error(
-            "Erro ao consultar geração de vídeo."
-        );
-
-    }
-
-    return await response.json();
+    return response.data;
 }
 
 
 export async function createVideoExtend(
     sourceTaskId: string,
     prompt: string,
-    duration: number,
-    userId: string
+    duration: number
 ) {
-
-    const response = await fetch(
-        `${API_URL}/video-generation/extend`,
+    const response = await api.post(
+        "/video-generation/extend",
         {
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json",
-            },
-
-            body: JSON.stringify({
-                source_task_id: sourceTaskId,
-                prompt,
-                duration,
-                user_id: userId,
-            }),
+            source_task_id: sourceTaskId,
+            prompt,
+            duration,
         }
     );
-
-    if (!response.ok) {
-
-        throw new Error(
-            "Erro ao criar extensão do vídeo."
-        );
-
-    }
-
-    return await response.json();
+    return response.data;
 }
 
 
 export async function createReferenceToVideo(
     referenceUrl: string,
     prompt: string,
-    duration: number,
-    userId: string
+    duration: number
 ) {
-
-    const response = await fetch(
-        `${API_URL}/video-generation/reference-to-video`,
+    const response = await api.post(
+        "/video-generation/reference-to-video",
         {
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json",
-            },
-
-            body: JSON.stringify({
-                reference_url: referenceUrl,
-                prompt,
-                duration,
-                user_id: userId,
-            }),
+            reference_url: referenceUrl,
+            prompt,
+            duration,
         }
     );
-
-    if (!response.ok) {
-
-        throw new Error(
-            "Erro ao criar vídeo de referência."
-        );
-
-    }
-
-    return await response.json();
+    return response.data;
 }
 
 
 export async function createTextToVideo(
     prompt: string,
     referenceImageUrl: string,
-    duration: number,
-    userId: string
+    duration: number
 ) {
-
-    const response = await fetch(
-        `${API_URL}/video-generation/text-to-video`,
+    const response = await api.post(
+        "/video-generation/text-to-video",
         {
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json",
-            },
-
-            body: JSON.stringify({
-                prompt,
-                reference_image_url: referenceImageUrl,
-                duration,
-                user_id: userId,
-            }),
+            prompt,
+            reference_image_url: referenceImageUrl,
+            duration,
         }
     );
-
-    if (!response.ok) {
-
-        throw new Error(
-            "Erro ao criar vídeo a partir do texto."
-        );
-
-    }
-
-    return await response.json();
+    return response.data;
 }

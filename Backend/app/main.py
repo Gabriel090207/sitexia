@@ -8,7 +8,6 @@ from app.routes.upload import router as upload_router
 from app.routes.swap import router as swap_router
 from app.routes.video_generation import router as video_generation_router
 from app.routes.image_generation import router as image_generation_router
-from app.routes.subscription import router as subscription_router
 from app.routes.download import router as download_router
 from app.routes.auth import router as auth_router
 from app.routes.topups import router as topups_router
@@ -50,8 +49,6 @@ app.include_router(swap_router)
 app.include_router(video_generation_router)
 
 app.include_router(image_generation_router)
-
-app.include_router(subscription_router)
 
 app.include_router(download_router)
 

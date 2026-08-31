@@ -17,8 +17,8 @@ export async function createSwapTask(
     materialId: string,
     sourceFaceId: string,
     targetFaceUrl: string,
-    userId: string,
-    generationCost: number
+    mediaType: "image" | "gif" | "video",
+    videoDuration: number | null
 ) {
     const { data } = await api.post(
         "/swap/task",
@@ -26,8 +26,8 @@ export async function createSwapTask(
             material_id: materialId,
             source_face_id: sourceFaceId,
             target_face_url: targetFaceUrl,
-            user_id: userId,
-            generation_cost: generationCost
+            media_type: mediaType,
+            video_duration: videoDuration
         }
     );
 

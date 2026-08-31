@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
 
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+
+from pydantic import BaseModel, ConfigDict
 
 from firebase_admin import firestore
+
+from app.dependencies.auth import AuthenticatedUser, get_current_user
 
 from app.services.firebase import (
     db,
@@ -101,41 +105,49 @@ router = APIRouter(
 
 
 class ImageToVideoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     image_url: str
     prompt: str
     duration: int
-    user_id: str
 
 
 class VideoExtendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     source_task_id: str
     prompt: str
     duration: int
-    user_id: str
 
 
 class ReferenceToVideoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     reference_url: str
     prompt: str
     duration: int
-    user_id: str
 
 
 class TextToVideoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str
     reference_image_url: str
     duration: int
-    user_id: str
 
 
 
 @router.post("/image-to-video")
 async def create_image_to_video(
-    request: ImageToVideoRequest
+    request: ImageToVideoRequest,
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
 
     charge_generation_credits(
-        request.user_id,
+        current_user.uid,
         "image-to-video",
         request.duration
     )
@@ -159,11 +171,15 @@ async def get_video_generation_task(
 
 @router.post("/extend")
 async def extend_video(
-    request: VideoExtendRequest
+    request: VideoExtendRequest,
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
 
     charge_generation_credits(
-        request.user_id,
+        current_user.uid,
         "video-extend",
         request.duration
     )
@@ -177,11 +193,15 @@ async def extend_video(
 
 @router.post("/reference-to-video")
 async def create_reference_to_video(
-    request: ReferenceToVideoRequest
+    request: ReferenceToVideoRequest,
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
 
     charge_generation_credits(
-        request.user_id,
+        current_user.uid,
         "reference-to-video",
         request.duration
     )
@@ -195,11 +215,15 @@ async def create_reference_to_video(
 
 @router.post("/text-to-video")
 async def create_text_to_video(
-    request: TextToVideoRequest
+    request: TextToVideoRequest,
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
 
     charge_generation_credits(
-        request.user_id,
+        current_user.uid,
         "text-to-video",
         request.duration
     )

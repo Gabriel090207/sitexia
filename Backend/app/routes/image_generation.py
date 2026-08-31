@@ -1,6 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
 
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+
+from pydantic import BaseModel, ConfigDict
+
+from app.dependencies.auth import AuthenticatedUser, get_current_user
 
 from app.services.firebase import (
     db,
@@ -53,10 +57,11 @@ COST_PER_IMAGE = 0.2
 # ===========================
 
 class TextToImageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str
     style: str
     quantity: int
-    user_id: str
 
 
 # ===========================
@@ -145,7 +150,11 @@ def charge_image_generation_credits(
 
 @router.post("/text-to-image")
 async def create_text_to_image(
-    request: TextToImageRequest
+    request: TextToImageRequest,
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
 
     prompt = request.prompt.strip()
@@ -194,7 +203,7 @@ async def create_text_to_image(
     # -----------------------
 
     charge_image_generation_credits(
-        request.user_id,
+        current_user.uid,
         request.quantity
     )
 

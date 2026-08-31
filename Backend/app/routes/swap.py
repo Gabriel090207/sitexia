@@ -1,8 +1,12 @@
+import math
+from typing import Annotated, Literal
+
 from fastapi import APIRouter
-from fastapi import Body, HTTPException
+from fastapi import Depends, HTTPException
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
+from app.dependencies.auth import AuthenticatedUser, get_current_user
 from app.services.firebase import db
 
 from app.services.deepswap import (
@@ -68,16 +72,62 @@ def deduct_credits(
 
 
 class CreateMaterialRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     image_url: str
+
+
+class CreateSwapTaskRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    material_id: str
+    source_face_id: str
+    target_face_url: str
+    media_type: Literal["image", "gif", "video"]
+    video_duration: float | None = None
 
 
 class ResolveTaskRequest(BaseModel):
     task_id: str
 
 
+def calculate_swap_cost(
+    media_type: str,
+    video_duration: float | None = None,
+) -> float:
+
+    if media_type == "image":
+        return 0.1
+
+    if media_type == "gif":
+        return 1.0
+
+    if media_type == "video":
+        if (
+            video_duration is None
+            or not math.isfinite(video_duration)
+            or video_duration <= 0
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Duração do vídeo inválida."
+            )
+
+        return float(max(1, math.ceil(video_duration / 15)))
+
+    raise HTTPException(
+        status_code=400,
+        detail="Tipo de mídia inválido."
+    )
+
+
 @router.post("/material")
 async def create_swap_material(
-    request: CreateMaterialRequest
+    request: CreateMaterialRequest,
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
 
     return await create_material(
@@ -97,48 +147,35 @@ async def get_swap_material(
 
 @router.post("/task")
 async def create_swap_task(
-
-    material_id: str = Body(),
-
-    source_face_id: str = Body(),
-
-    target_face_url: str = Body(),
-
-    user_id: str = Body(),
-
-    generation_cost: float = Body()
-
+    request: CreateSwapTaskRequest,
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
+
+    cost = calculate_swap_cost(
+        request.media_type,
+        request.video_duration,
+    )
 
     user_ref = (
         db.collection("users")
-        .document(user_id)
+        .document(current_user.uid)
     )
 
-    user_snapshot = user_ref.get()
+    transaction = db.transaction()
 
-    if not user_snapshot.exists:
-        raise HTTPException(
-            status_code=404,
-            detail="Usuário não encontrado."
-        )
-
-    user_data = user_snapshot.to_dict()
-
-    current_credits = user_data.get("credits", 0)
-
-    print(
-        f"Custo recebido para geração: {generation_cost} crédito(s)."
-    )
-
-    print(
-        f"Usuário {user_id} possui {current_credits} créditos."
+    remaining_credits = deduct_credits(
+        transaction,
+        user_ref,
+        cost,
     )
 
     return await create_task(
-        material_id,
-        source_face_id,
-        target_face_url
+        request.material_id,
+        request.source_face_id,
+        request.target_face_url
     )
 
 @router.get("/task/{task_id}")

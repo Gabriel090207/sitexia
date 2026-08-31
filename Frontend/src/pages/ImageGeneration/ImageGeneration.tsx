@@ -365,8 +365,7 @@ async function handleGenerateImage() {
             await createTextToImage(
                 prompt,
                 imageStyle,
-                quantity,
-                user.uid
+                quantity
             );
 
         console.log(

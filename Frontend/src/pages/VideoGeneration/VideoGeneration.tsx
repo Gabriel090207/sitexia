@@ -518,8 +518,7 @@ async function handleGenerateVideo() {
             task = await createVideoExtend(
                 selectedSourceVideo!.taskId!,
                 prompt,
-                duration,
-                user.uid
+                duration
             );
 
         } else if (
@@ -529,8 +528,7 @@ async function handleGenerateVideo() {
             task = await createReferenceToVideo(
                 imageUrl,
                 prompt,
-                duration,
-                user.uid
+                duration
             );
 
         } else if (
@@ -540,8 +538,7 @@ async function handleGenerateVideo() {
             task = await createTextToVideo(
                 prompt,
                 imageUrl,
-                duration,
-                user.uid
+                duration
             );
 
         } else {
@@ -549,8 +546,7 @@ async function handleGenerateVideo() {
             task = await createImageToVideo(
                 imageUrl,
                 prompt,
-                duration,
-                user.uid
+                duration
             );
 
         }

@@ -689,8 +689,12 @@ async function sleep(
                                         materialData.materialId,
                                         sourceFaceId,
                                         faceUrl,
-                                        user.uid,
-                                        generationCost
+                                        isVideo
+                                            ? "video"
+                                            : isGif
+                                                ? "gif"
+                                                : "image",
+                                        isVideo ? videoDuration : null
                                     );
 
                                     console.log(
