@@ -71,7 +71,11 @@ def deduct_credits(
         user_data.get("credits") or 0
     )
 
-    if current_credits < cost:
+    reserved_credits = float(
+        user_data.get("reservedCredits") or 0
+    )
+
+    if current_credits - reserved_credits < cost:
         raise ValueError(
             "Créditos insuficientes."
         )

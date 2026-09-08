@@ -50,31 +50,31 @@ function AITools() {
                 <div className="ai-tools-grid">
 
                     <ToolCard
+                        icon={<Video size={42} strokeWidth={1.8} />}
+                        title="Text To Video"
+                        description="Crie vídeos a partir de texto ou imagens usando inteligência artificial."
+                        link="/geracao-de-video?modo=texto-para-video"
+                    />
+
+                    <ToolCard
                         icon={<ScanFace size={42} strokeWidth={1.8} />}
                         title="Face Swap"
                         description="Troque rostos em fotos com realismo impressionante utilizando IA."
-                        link="/face-swap"
+                        link="/troca-de-rosto"
                     />
 
                     <ToolCard
                         icon={<Clapperboard size={42} strokeWidth={1.8} />}
                         title="Video Generator"
                         description="Substitua rostos em vídeos com rapidez e alta qualidade."
-                        link="/video-generation"
-                    />
-
-                    <ToolCard
-                        icon={<Video size={42} strokeWidth={1.8} />}
-                        title="Text To Video"
-                        description="Crie vídeos a partir de texto ou imagens usando inteligência artificial."
-                        link="/video-generation?mode=text-to-video"
+                        link="/geracao-de-video"
                     />
 
                     <ToolCard
                         icon={<Image size={42} strokeWidth={1.8} />}
                         title="Image Generator"
                         description="Gere imagens únicas em segundos utilizando modelos avançados de IA."
-                        link="/image-generation"
+                        link="/geracao-de-imagem"
                     />
 
                 </div>

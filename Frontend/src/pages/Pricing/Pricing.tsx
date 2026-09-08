@@ -75,7 +75,7 @@ const navigate = useNavigate();
                         <button
                             className="pricing-button"
                             onClick={() => {
-                                navigate("/checkout", {
+                                navigate("/finalizar-recarga", {
                                     state: {
                                         plan: PLANS.find(
                                             (plan) => plan.id === "starter"
@@ -136,7 +136,7 @@ const navigate = useNavigate();
                        <button
                             className="pricing-button"
                             onClick={() => {
-                                navigate("/checkout", {
+                                navigate("/finalizar-recarga", {
                                     state: {
                                         plan: PLANS.find(
                                             (plan) => plan.id === "pro"
@@ -189,7 +189,7 @@ const navigate = useNavigate();
                         <button
                             className="pricing-button"
                             onClick={() => {
-                                navigate("/checkout", {
+                                navigate("/finalizar-recarga", {
                                     state: {
                                         plan: PLANS.find(
                                             (plan) => plan.id === "enterprise"

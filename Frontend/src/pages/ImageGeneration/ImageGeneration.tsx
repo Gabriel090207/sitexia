@@ -1,4 +1,7 @@
 import "./ImageGeneration.css";
+import { getGenerationErrorMessage } from "../../utils/generationErrors";
+
+import { Link } from "react-router-dom";
 
 import {
     useEffect,
@@ -123,6 +126,11 @@ const canGenerate =
     hasEnoughCredits &&
     !isGenerating;
 
+
+const isBlockedByInsufficientCredits =
+    !!user &&
+    !!prompt.trim() &&
+    !hasEnoughCredits;
 
 const generateBlockedMessage =
     !user
@@ -433,9 +441,10 @@ async function handleGenerateImage() {
         );
 
         setError(
-            error instanceof Error
-                ? error.message
-                : "Erro ao gerar imagem."
+            getGenerationErrorMessage(
+                error,
+                "Não foi possível gerar a imagem. Tente novamente."
+            )
         );
 
     } finally {
@@ -846,7 +855,14 @@ async function handleGenerateImage() {
 
                         </button>
 
-                        {generateBlockedMessage && (
+                        {isBlockedByInsufficientCredits ? (
+                            <Link
+                                to="/creditos"
+                                className="image-generation-credits-cta"
+                            >
+                                Você não possui créditos suficientes. Recarregue aqui
+                            </Link>
+                        ) : generateBlockedMessage && (
                             <p className="image-generation-blocked-message">
                                 {generateBlockedMessage}
                             </p>

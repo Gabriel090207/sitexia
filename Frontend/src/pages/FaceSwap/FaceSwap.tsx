@@ -12,7 +12,7 @@ import {
 
 import db from "../../firebase/firestore";
 
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
     uploadFile,
@@ -100,6 +100,12 @@ const canGenerate =
     generationCost > 0 &&
     hasEnoughCredits &&
     !isGenerating;
+
+const isBlockedByInsufficientCredits =
+    !!user &&
+    !!fileUrl &&
+    !!faceUrl &&
+    !hasEnoughCredits;
 
 const generateBlockedMessage =
     !user
@@ -767,9 +773,18 @@ async function sleep(
                             </button> 
 
                             {!isGenerating && generateBlockedMessage && (
-                                <p className="face-swap-create-blocked-message">
-                                    {generateBlockedMessage}
-                                </p>
+                                isBlockedByInsufficientCredits ? (
+                                    <Link
+                                        to="/creditos"
+                                        className="face-swap-credits-cta"
+                                    >
+                                        Você não possui créditos suficientes. Recarregue aqui
+                                    </Link>
+                                ) : (
+                                    <p className="face-swap-create-blocked-message">
+                                        {generateBlockedMessage}
+                                    </p>
+                                )
                             )}  
 
                     </div>
@@ -841,7 +856,7 @@ async function sleep(
                             <button
                                 className="face-swap-library-upload"
                                 type="button"
-                                onClick={() => navigate("/library")}
+                                onClick={() => navigate("/biblioteca")}
                             >
                                 Ver biblioteca completa
                             </button>

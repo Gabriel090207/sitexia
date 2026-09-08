@@ -4,7 +4,7 @@ import {
     useState,
 } from "react";
 
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
     doc,
@@ -14,6 +14,7 @@ import {
 import db from "../../firebase/firestore";
 
 import "./VideoGeneration.css";
+import { getGenerationErrorMessage } from "../../utils/generationErrors";
 
 import {
     ImagePlus,
@@ -65,9 +66,14 @@ type VideoMode =
 const [activeMode, setActiveMode] =
     useState<VideoMode>(() => {
 
-        const mode = searchParams.get("mode");
+        const mode =
+            searchParams.get("modo") ||
+            searchParams.get("mode");
 
-        if (mode === "text-to-video") {
+        if (
+            mode === "texto-para-video" ||
+            mode === "text-to-video"
+        ) {
             return "text-to-video";
         }
 
@@ -136,6 +142,12 @@ const canGenerate =
     hasEnoughCredits &&
     !isUploading &&
     !isGenerating;
+
+const isBlockedByInsufficientCredits =
+    !!user &&
+    hasRequiredMedia &&
+    !!prompt.trim() &&
+    !hasEnoughCredits;
 
 const generateBlockedMessage =
     !user
@@ -624,9 +636,10 @@ async function handleGenerateVideo() {
         setGenerationStatus("");
 
         setError(
-            error instanceof Error
-                ? error.message
-                : "Não foi possível gerar o vídeo."
+            getGenerationErrorMessage(
+                error,
+                "Não foi possível gerar o vídeo. Tente novamente."
+            )
         );
 
     } finally {
@@ -1094,7 +1107,14 @@ async function handleGenerateVideo() {
 
                                 </button>
 
-                                {generateBlockedMessage && (
+                                {isBlockedByInsufficientCredits ? (
+                                    <Link
+                                        to="/creditos"
+                                        className="video-generation-credits-cta"
+                                    >
+                                        Você não possui créditos suficientes. Recarregue aqui
+                                    </Link>
+                                ) : generateBlockedMessage && (
                                     <p className="video-generation-blocked-message">
                                         {generateBlockedMessage}
                                     </p>

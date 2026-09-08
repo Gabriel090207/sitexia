@@ -172,7 +172,7 @@ export default function Checkout() {
     const isPaymentMethodLocked = isPixLoading || hasActivePix ||
         isCardSubmitting || hasActiveCard;
 
-    if (!selectedPackage) return <Navigate to="/pricing" replace />;
+    if (!selectedPackage) return <Navigate to="/creditos" replace />;
     const packageId = selectedPackage.id;
 
     function selectPaymentMethod(method: PaymentMethod) {

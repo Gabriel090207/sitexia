@@ -1,4 +1,9 @@
-import { Route, Routes } from "react-router-dom";
+import {
+    Navigate,
+    Route,
+    Routes,
+    useLocation,
+} from "react-router-dom";
 
 import MainLayout from "../layouts/MainLayout/MainLayout";
 
@@ -20,6 +25,24 @@ import Profile from "../pages/Profile/Profile";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 
+interface LegacyRouteRedirectProps {
+    to: string;
+}
+
+function LegacyRouteRedirect({
+    to,
+}: LegacyRouteRedirectProps) {
+    const location = useLocation();
+
+    return (
+        <Navigate
+            to={`${to}${location.search}`}
+            replace
+            state={location.state}
+        />
+    );
+}
+
 function AppRouter() {
     return (
         <>
@@ -35,22 +58,22 @@ function AppRouter() {
                 />
 
                 <Route
-                    path="/face-swap"
+                    path="/troca-de-rosto"
                     element={<FaceSwap />}
                 />
 
                 <Route
-                    path="/video-generation"
+                    path="/geracao-de-video"
                     element={<VideoGeneration />}
                 />
 
                 <Route
-                    path="/image-generation"
+                    path="/geracao-de-imagem"
                     element={<ImageGeneration />}
                 />
 
                 <Route
-                    path="/library"
+                    path="/biblioteca"
                     element={
                         <ProtectedRoute>
                             <Library />
@@ -59,14 +82,14 @@ function AppRouter() {
                 />
 
                 <Route
-                    path="/pricing"
+                    path="/creditos"
                     element={<Pricing />}
                 />
 
 
 
                 <Route
-                    path="/checkout"
+                    path="/finalizar-recarga"
                     element={
                         <ProtectedRoute>
                             <Checkout />
@@ -76,7 +99,7 @@ function AppRouter() {
 
 
                 <Route
-                    path="/profile"
+                    path="/perfil"
                     element={
                         <ProtectedRoute>
                             <Profile />
@@ -87,12 +110,52 @@ function AppRouter() {
                
 
                 <Route
-                    path="/login"
+                    path="/entrar"
                     element={
                         <PublicRoute>
                             <Login />
                         </PublicRoute>
                     }
+                />
+
+                <Route
+                    path="/face-swap"
+                    element={<LegacyRouteRedirect to="/troca-de-rosto" />}
+                />
+
+                <Route
+                    path="/video-generation"
+                    element={<LegacyRouteRedirect to="/geracao-de-video" />}
+                />
+
+                <Route
+                    path="/image-generation"
+                    element={<LegacyRouteRedirect to="/geracao-de-imagem" />}
+                />
+
+                <Route
+                    path="/library"
+                    element={<LegacyRouteRedirect to="/biblioteca" />}
+                />
+
+                <Route
+                    path="/pricing"
+                    element={<LegacyRouteRedirect to="/creditos" />}
+                />
+
+                <Route
+                    path="/checkout"
+                    element={<LegacyRouteRedirect to="/finalizar-recarga" />}
+                />
+
+                <Route
+                    path="/profile"
+                    element={<LegacyRouteRedirect to="/perfil" />}
+                />
+
+                <Route
+                    path="/login"
+                    element={<LegacyRouteRedirect to="/entrar" />}
                 />
 
             </Route>

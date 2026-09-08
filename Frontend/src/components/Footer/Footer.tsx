@@ -44,15 +44,15 @@ function Footer() {
                                 Ferramentas
                             </h3>
 
-                            <Link to="/face-swap">
+                            <Link to="/troca-de-rosto">
                                 Face Swap
                             </Link>
 
-                            <Link to="/video-generation">
+                            <Link to="/geracao-de-video">
                                 Video Generation
                             </Link>
 
-                            <Link to="/image-generation">
+                            <Link to="/geracao-de-imagem">
                                 Image Generation
                             </Link>
 
@@ -68,11 +68,11 @@ function Footer() {
                                 Início
                             </Link>
 
-                            <Link to="/pricing">
+                            <Link to="/creditos">
                                 Pacotes de créditos
                             </Link>
 
-                            <Link to="/library">
+                            <Link to="/biblioteca">
                                 Biblioteca
                             </Link>
 

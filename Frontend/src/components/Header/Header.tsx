@@ -106,10 +106,12 @@ function Header() {
                 <div className="header-container">
 
                     <button
+                        type="button"
+                        aria-label="Abrir menu de navegação"
                         className="header-mobile-menu-button"
                         onClick={() => setSidebarOpen(true)}
                     >
-                        <Menu size={28} />
+                        <Menu size={28} aria-hidden="true" />
                     </button>
 
                     <NavLink
@@ -143,7 +145,7 @@ function Header() {
 
                                 <li>
                                     <NavLink
-                                        to="/library"
+                                        to="/biblioteca"
                                         className={getNavLinkClass}
                                     >
                                         Biblioteca
@@ -155,7 +157,7 @@ function Header() {
                             <li>
 
                                 <NavLink
-                                    to="/face-swap"
+                                    to="/troca-de-rosto"
                                     className={getNavLinkClass}
                                 >
                                     Face Swap
@@ -166,7 +168,7 @@ function Header() {
                             <li>
 
                                 <NavLink
-                                    to="/video-generation"
+                                    to="/geracao-de-video"
                                     className={getNavLinkClass}
                                 >
                                     Video Generation
@@ -177,7 +179,7 @@ function Header() {
                             <li>
 
                                 <NavLink
-                                    to="/image-generation"
+                                    to="/geracao-de-imagem"
                                     className={getNavLinkClass}
                                 >
                                     Image Generation
@@ -187,7 +189,7 @@ function Header() {
 
                             <li>
                                 <NavLink
-                                    to="/pricing"
+                                    to="/creditos"
                                     className={getNavLinkClass}
                                 >
                                     Comprar créditos
@@ -203,7 +205,7 @@ function Header() {
                         {!user && (
 
                             <button
-                                onClick={() => navigate("/login")}
+                                onClick={() => navigate("/entrar")}
                                 className="header-register-button"
                             >
                                 Entrar
@@ -217,7 +219,7 @@ function Header() {
 
                                 <button
                                     className="header-profile-button"
-                                    onClick={() => navigate("/profile")}
+                                    onClick={() => navigate("/perfil")}
                                 >
 
                                     <User size={18} />
@@ -283,11 +285,13 @@ function Header() {
             >
 
                 <button
+                    type="button"
+                    aria-label="Fechar menu de navegação"
                     className="header-sidebar-close"
                     onClick={() => setSidebarOpen(false)}
                 >
 
-                    <X size={28} />
+                    <X size={28} aria-hidden="true" />
 
                 </button>
 
@@ -299,25 +303,25 @@ function Header() {
 
                     {user && (
 
-                        <NavLink to="/library">
+                        <NavLink to="/biblioteca">
                             Biblioteca
                         </NavLink>
 
                     )}
 
-                    <NavLink to="/face-swap">
+                    <NavLink to="/troca-de-rosto">
                         Face Swap
                     </NavLink>
 
-                    <NavLink to="/video-generation">
+                    <NavLink to="/geracao-de-video">
                         Video Generation
                     </NavLink>
 
-                    <NavLink to="/image-generation">
+                    <NavLink to="/geracao-de-imagem">
                         Image Generation
                     </NavLink>
 
-                    <NavLink to="/pricing">
+                    <NavLink to="/creditos">
                         Comprar créditos
                     </NavLink>
 
@@ -329,7 +333,7 @@ function Header() {
 
                         <button
                             className="header-sidebar-profile-button"
-                            onClick={() => navigate("/profile")}
+                            onClick={() => navigate("/perfil")}
                         >
                             <User size={18} />
 

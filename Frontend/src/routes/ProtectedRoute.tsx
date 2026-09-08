@@ -25,7 +25,7 @@ function ProtectedRoute({
 
     if (!user) {
 
-        return <Navigate to="/login" replace />;
+        return <Navigate to="/entrar" replace />;
 
     }
 

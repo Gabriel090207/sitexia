@@ -1610,3 +1610,43 @@
     text-align: center;
 
 }
+
+.face-swap-credits-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 52px;
+    /* Compensa o gap de 25px do workspace para manter 12px entre os botões. */
+    margin-top: calc(12px - 25px);
+    padding: 16px 20px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 16px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+    text-align: center;
+    text-decoration: none;
+    box-shadow: 0 4px 16px rgba(255, 32, 32, .18);
+    cursor: pointer;
+    transition: background .25s ease, box-shadow .25s ease;
+}
+
+.face-swap-credits-cta:hover {
+    background: var(--primary-hover);
+    box-shadow: 0 6px 20px rgba(255, 32, 32, .3);
+}
+
+.face-swap-credits-cta:focus-visible {
+    outline: 2px solid #ff6a6a;
+    outline-offset: 3px;
+}
+
+@media (max-width:768px) {
+    .face-swap-credits-cta {
+        font-size: 12px;
+    }
+}

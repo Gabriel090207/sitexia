@@ -405,7 +405,7 @@ export default function Profile() {
                     )}
 
                     <Link
-                        to="/pricing"
+                        to="/creditos"
                         className="profile-plan-button"
                     >
 

@@ -1,0 +1,19 @@
+# Xia AI
+
+A Xia AI é uma plataforma de criação de conteúdo com inteligência artificial. O site oferece ferramentas para troca de rostos, geração de imagens e geração de vídeos, além da compra de créditos para utilização desses serviços.
+
+## Páginas principais
+
+- [Página inicial](https://xiaswap.com/)
+- [Troca de rosto](https://xiaswap.com/troca-de-rosto)
+- [Geração de imagens](https://xiaswap.com/geracao-de-imagem)
+- [Geração de vídeos](https://xiaswap.com/geracao-de-video)
+- [Créditos e preços](https://xiaswap.com/creditos)
+- [Entrar](https://xiaswap.com/entrar)
+
+## Funcionalidades
+
+- Troca de rostos em imagens, GIFs e vídeos.
+- Geração de imagens por inteligência artificial.
+- Geração e extensão de vídeos por inteligência artificial.
+- Compra avulsa de créditos para utilizar as ferramentas.

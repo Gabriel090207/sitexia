@@ -7,9 +7,9 @@ function Home() {
     return (
         <main className="home">
 
-            <Hero />
-
             <AITools />
+
+            <Hero />
 
         </main>
     );
