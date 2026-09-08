@@ -1,3 +1,4 @@
+import { formatCredits } from "../../utils/formatCredits";
 import "./ImageGeneration.css";
 import { getGenerationErrorMessage } from "../../utils/generationErrors";
 
@@ -138,13 +139,7 @@ const generateBlockedMessage =
         : !prompt.trim()
             ? "Escreva um prompt para continuar."
             : !hasEnoughCredits
-                ? `Créditos insuficientes. Esta geração custa ${generationCost.toLocaleString(
-                    "pt-BR",
-                    {
-                        minimumFractionDigits: 1,
-                        maximumFractionDigits: 1,
-                    }
-                )} créditos.`
+                ? `Créditos insuficientes. Esta geração custa ${formatCredits(generationCost)} créditos.`
                 : "";
 
 useEffect(() => {
@@ -310,10 +305,7 @@ async function waitForImageTask(
         const task =
             await getImageTask(taskId);
 
-        console.log(
-            "Status da imagem:",
-            task
-        );
+      
 
         if (
             task.taskStatus === "SUCCEEDED"
@@ -376,10 +368,8 @@ async function handleGenerateImage() {
                 quantity
             );
 
-        console.log(
-            "Task de imagem criada:",
-            task
-        );
+     
+       
 
         // 2. Aguarda a geração terminar
         const result =
@@ -387,10 +377,7 @@ async function handleGenerateImage() {
                 task.taskId
             );
 
-        console.log(
-            "Imagem finalizada:",
-            result
-        );
+       
 
         if (!result.videoUrl) {
 
@@ -400,10 +387,7 @@ async function handleGenerateImage() {
 
         }
 
-        console.log(
-            "URL temporária da imagem:",
-            result.videoUrl
-        );
+     
 
         // 3. Salva a imagem no Firebase Storage
         const firebaseImageUrl =
@@ -412,10 +396,7 @@ async function handleGenerateImage() {
                 `users/${user.uid}/images`
             );
 
-        console.log(
-            "Imagem salva no Firebase:",
-            firebaseImageUrl
-        );
+       
 
         // 4. Registra na biblioteca / Firestore
         await createLibraryImage(
@@ -424,9 +405,7 @@ async function handleGenerateImage() {
             "image-generation"
         );
 
-        console.log(
-            "Imagem salva na biblioteca."
-        );
+     
 
         // 5. Exibe o resultado permanente
         setGeneratedImageUrl(
@@ -465,7 +444,7 @@ async function handleGenerateImage() {
                 <Coins size={20} />
 
                     <span>
-                        {credits} {credits === 1 ? "crédito" : "créditos"}
+                        {formatCredits(credits)} {credits === 1 ? "crédito" : "créditos"}
                     </span>
                 </div>
 

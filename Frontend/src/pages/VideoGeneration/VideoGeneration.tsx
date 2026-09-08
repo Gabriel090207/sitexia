@@ -1,3 +1,4 @@
+import { formatCredits } from "../../utils/formatCredits";
 import {
     useEffect,
     useRef,
@@ -159,13 +160,7 @@ const generateBlockedMessage =
             : !prompt.trim()
                 ? "Escreva um prompt para continuar."
                 : !hasEnoughCredits
-                    ? `Créditos insuficientes. Esta geração custa ${generationCost.toLocaleString(
-                        "pt-BR",
-                        {
-                            minimumFractionDigits: 1,
-                            maximumFractionDigits: 1,
-                        }
-                    )} créditos.`
+                    ? `Créditos insuficientes. Esta geração custa ${formatCredits(generationCost)} créditos.`
                     : "";
    
 useEffect(() => {
@@ -308,10 +303,7 @@ async function handleImageChange(
 
         setImageUrl(uploadedUrl);
 
-        console.log(
-            "Imagem do vídeo enviada:",
-            uploadedUrl
-        );
+      
 
     } catch (error) {
 
@@ -351,10 +343,7 @@ async function waitForVideoTask(
         const task =
             await getVideoTask(taskId);
 
-        console.log(
-            "Status do vídeo:",
-            task
-        );
+    
 
         if (task.taskStatus === "PENDING") {
 
@@ -563,10 +552,7 @@ async function handleGenerateVideo() {
 
         }
 
-        console.log(
-            "Task de vídeo criada:",
-            task
-        );
+       
 
         setGenerationStatus(
             "Preparando geração..."
@@ -577,10 +563,7 @@ async function handleGenerateVideo() {
                 task.taskId
             );
 
-        console.log(
-            "Vídeo finalizado:",
-            result
-        );
+        
 
         if (!result.videoUrl) {
 
@@ -605,20 +588,13 @@ async function handleGenerateVideo() {
                 `users/${user.uid}/videos`
             );
 
-        console.log(
-            "Vídeo salvo no Firebase:",
-            firebaseVideoUrl
-        );
-
+      
         await createLibraryVideo(
             user.uid,
             firebaseVideoUrl,
             task.taskId
         );
 
-        console.log(
-            "Vídeo salvo na biblioteca."
-        );
 
         setGeneratedVideoUrl(
             firebaseVideoUrl
@@ -660,7 +636,7 @@ async function handleGenerateVideo() {
                     <Coins size={20} />
 
                     <span>
-                        {credits} {credits === 1 ? "crédito" : "créditos"}
+                        {formatCredits(credits)} {credits === 1 ? "crédito" : "créditos"}
                     </span>
                 </div>
 

@@ -1,3 +1,4 @@
+import { formatCredits } from "../../utils/formatCredits";
 import "./FaceSwap.css";
 import {
     useEffect,
@@ -115,7 +116,7 @@ const generateBlockedMessage =
             : !faceUrl
                 ? "Adicione um rosto para continuar."
                 : generationCost > credits
-                    ? `Créditos insuficientes. Esta geração custa ${generationCost} ${
+                    ? `Créditos insuficientes. Esta geração custa ${formatCredits(generationCost)} ${
                         generationCost === 1 ? "crédito" : "créditos"
                     }.`
                     : "";
@@ -244,7 +245,7 @@ async function sleep(
                     <Coins size={20} />
 
                     <span>
-                        {credits} {credits === 1 ? "crédito" : "créditos"}
+                        {formatCredits(credits)} {credits === 1 ? "crédito" : "créditos"}
                     </span>
                 </div>
 
@@ -650,7 +651,7 @@ async function sleep(
                                         fileUrl
                                     );
 
-                                    console.log("Material criado:", material);
+                                   
 
                                     let materialData = null;
 
@@ -662,7 +663,7 @@ async function sleep(
                                             material.materialId
                                         );
 
-                                        console.log(materialData);
+                                      
 
                                         if (
                                             materialData.status === "SUCCEEDED"
@@ -674,18 +675,12 @@ async function sleep(
 
                                     }
 
-                                    console.log(
-                                        "Material pronto:",
-                                        materialData
-                                    );
+                                   
 
                                     const sourceFaceId =
                                         materialData.faces[0].id;
 
-                                    console.log(
-                                        "Face encontrada:",
-                                        sourceFaceId
-                                    );
+                                  
 
                                     if (!user) {
                                         throw new Error("Usuário não autenticado.");
@@ -703,10 +698,7 @@ async function sleep(
                                         isVideo ? videoDuration : null
                                     );
 
-                                    console.log(
-                                        "Task criada:",
-                                        task
-                                    );
+                                  
 
                                     let taskData = null;
 
@@ -718,7 +710,7 @@ async function sleep(
                                             task.taskId
                                         );
 
-                                        console.log(taskData);
+                                      
 
                                         if (taskData.taskStatus === "SUCCEEDED") {
 
@@ -726,10 +718,7 @@ async function sleep(
                                                 task.taskId
                                             );
 
-                                            console.log(
-                                                "Resultado:",
-                                                result
-                                            );
+                                          
 
                                             setResultUrl(
                                                 result.file_url

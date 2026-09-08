@@ -1,3 +1,4 @@
+import { formatCredits } from "../../utils/formatCredits";
 import "./Checkout.css";
 
 import { useRef, useState } from "react";
@@ -816,7 +817,7 @@ export default function Checkout() {
                             </div>
                             <div className="checkout-summary-row">
                                 <span>Créditos</span>
-                                <strong>{selectedPackage.credits}</strong>
+                                <strong>{formatCredits(selectedPackage.credits)}</strong>
                             </div>
                             <div className="checkout-summary-divider" />
                             <div className="checkout-summary-total">

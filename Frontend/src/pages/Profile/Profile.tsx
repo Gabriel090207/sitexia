@@ -1,3 +1,4 @@
+import { formatCredits } from "../../utils/formatCredits";
 import "./Profile.css";
 
 import {
@@ -386,7 +387,7 @@ export default function Profile() {
 
                             <strong>
 
-                                {credits} {credits === 1 ? "crédito disponível" : "créditos disponíveis"}
+                                {formatCredits(credits)} {credits === 1 ? "crédito disponível" : "créditos disponíveis"}
 
                             </strong>
 

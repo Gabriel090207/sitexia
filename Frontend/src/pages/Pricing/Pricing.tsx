@@ -1,3 +1,4 @@
+import { formatCredits } from "../../utils/formatCredits";
 import "./Pricing.css";
 
 import {
@@ -56,9 +57,9 @@ const navigate = useNavigate();
 
                         <p className="pricing-credits">
                             {
-                                PLANS.find(
+                                formatCredits(PLANS.find(
                                     (plan) => plan.id === "starter"
-                                )!.credits
+                                )!.credits)
                             } Créditos
                         </p>
 
@@ -117,9 +118,9 @@ const navigate = useNavigate();
 
                         <p className="pricing-credits">
                             {
-                                PLANS.find(
+                                formatCredits(PLANS.find(
                                     (plan) => plan.id === "pro"
-                                )!.credits
+                                )!.credits)
                             } Créditos
                         </p>
 
@@ -170,9 +171,9 @@ const navigate = useNavigate();
 
                         <p className="pricing-credits">
                             {
-                                PLANS.find(
+                                formatCredits(PLANS.find(
                                     (plan) => plan.id === "enterprise"
-                                )!.credits
+                                )!.credits)
                             } Créditos
                         </p>
 
@@ -239,7 +240,7 @@ const navigate = useNavigate();
                                     <td>Image Generation</td>
                                     <td>1 imagem</td>
                                     <td>
-                                        <strong>0,2</strong> crédito
+                                        <strong>{formatCredits(0.2)}</strong> crédito
                                     </td>
                                 </tr>
 
@@ -247,7 +248,7 @@ const navigate = useNavigate();
                                     <td>Image Generation</td>
                                     <td>4 imagens</td>
                                     <td>
-                                        <strong>0,8</strong> crédito
+                                        <strong>{formatCredits(0.8)}</strong> crédito
                                     </td>
                                 </tr>
 
@@ -255,7 +256,7 @@ const navigate = useNavigate();
                                     <td>Image Generation</td>
                                     <td>9 imagens</td>
                                     <td>
-                                        <strong>1,8</strong> créditos
+                                        <strong>{formatCredits(1.8)}</strong> créditos
                                     </td>
                                 </tr>
 
@@ -263,7 +264,7 @@ const navigate = useNavigate();
                                     <td>Video Generation</td>
                                     <td>5 segundos</td>
                                     <td>
-                                        <strong>1,2</strong> créditos
+                                        <strong>{formatCredits(1.2)}</strong> créditos
                                     </td>
                                 </tr>
 
@@ -271,7 +272,7 @@ const navigate = useNavigate();
                                     <td>Video Generation</td>
                                     <td>10 segundos</td>
                                     <td>
-                                        <strong>2,4</strong> créditos
+                                        <strong>{formatCredits(2.4)}</strong> créditos
                                     </td>
                                 </tr>
 
@@ -279,7 +280,7 @@ const navigate = useNavigate();
                                     <td>Video Generation</td>
                                     <td>15 segundos</td>
                                     <td>
-                                        <strong>3,6</strong> créditos
+                                        <strong>{formatCredits(3.6)}</strong> créditos
                                     </td>
                                 </tr>
 
@@ -287,7 +288,7 @@ const navigate = useNavigate();
                                     <td>Reference to Video</td>
                                     <td>5 segundos</td>
                                     <td>
-                                        <strong>2</strong> créditos
+                                        <strong>{formatCredits(2)}</strong> créditos
                                     </td>
                                 </tr>
 
@@ -295,7 +296,7 @@ const navigate = useNavigate();
                                     <td>Reference to Video</td>
                                     <td>10 segundos</td>
                                     <td>
-                                        <strong>4</strong> créditos
+                                        <strong>{formatCredits(4)}</strong> créditos
                                     </td>
                                 </tr>
 
@@ -303,7 +304,7 @@ const navigate = useNavigate();
                                     <td>Reference to Video</td>
                                     <td>15 segundos</td>
                                     <td>
-                                        <strong>6</strong> créditos
+                                        <strong>{formatCredits(6)}</strong> créditos
                                     </td>
                                 </tr>
 
