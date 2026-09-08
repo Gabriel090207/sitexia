@@ -101,7 +101,9 @@ async def post(
 
 async def get(
     uri: str,
-    query: str = ""
+    query: str = "",
+    *,
+    log_response: bool = True,
 ):
     headers, _ = _sign(
         "GET",
@@ -117,12 +119,13 @@ async def get(
             params=query
         )
 
-        print("===================================")
-        print("GET:", f"{BASE_URL}{uri}")
-        print("STATUS:", response.status_code)
-        print("BODY:")
-        print(response.text)
-        print("===================================")
+        if log_response:
+            print("===================================")
+            print("GET:", f"{BASE_URL}{uri}")
+            print("STATUS:", response.status_code)
+            print("BODY:")
+            print(response.text)
+            print("===================================")
 
         response.raise_for_status()
 
@@ -207,12 +210,15 @@ async def create_text_to_video_task(
 
 
 async def get_video_task(
-    task_id: str
+    task_id: str,
+    *,
+    log_response: bool = True,
 ):
 
     
     return await get(
-        f"/openapi/v1/tasks/{task_id}"
+        f"/openapi/v1/tasks/{task_id}",
+        log_response=log_response,
     )
 
 

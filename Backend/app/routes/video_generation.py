@@ -5,6 +5,7 @@ from typing import Annotated
 from uuid import uuid4
 
 import httpx
+from google.api_core.exceptions import Aborted, DeadlineExceeded, ServiceUnavailable
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -100,7 +101,14 @@ async def create_reserved_video(user_id, mode, duration, create_task, *task_args
         raise HTTPException(status_code=502, detail="A API não retornou uma tarefa de geração válida.")
 
     try:
-        attach_generation_task(generation_id, str(task_id))
+        try:
+            attach_generation_task(generation_id, str(task_id))
+        except (Aborted, DeadlineExceeded, ServiceUnavailable):
+            logger.warning(
+                "Repetindo vínculo após falha transitória: generationId=%s taskId=%s",
+                generation_id, task_id,
+            )
+            attach_generation_task(generation_id, str(task_id))
     except Exception:
         # A task já existe: falhar ao persistir o vínculo não autoriza liberação.
         logger.exception(
