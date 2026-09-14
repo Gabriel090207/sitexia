@@ -1,7 +1,7 @@
 PACKAGES = {
     "starter": {
         "name": "Starter",
-        "price": 129.90,
+        "price": 0.10,
         "credits": 12,
     },
     "pro": {
