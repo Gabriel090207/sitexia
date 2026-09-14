@@ -612,11 +612,11 @@ export default function Checkout() {
                 </header>
 
                 <section className="checkout-layout">
-                    <div className="checkout-form-card">
+                    <div className={`checkout-form-card${isPaymentConfirmed ? " checkout-form-card-success" : ""}`}>
                         {isPaymentConfirmed ? (
                             <div className="checkout-success checkout-success-confirmed" role="status">
                                 <div className="checkout-success-icon" aria-hidden="true">
-                                    <CheckCircle2 size={40} />
+                                    <CheckCircle2 size={48} strokeWidth={1.6} />
                                 </div>
                                 <h2 className="checkout-success-title">Pagamento confirmado!</h2>
                                 <p className="checkout-success-description">
@@ -624,14 +624,15 @@ export default function Checkout() {
                                 </p>
                                 <div className="checkout-success-credits">
                                     <span>Pacote {selectedPackage.name}</span>
-                                    <strong>{formatCredits(selectedPackage.credits)} créditos</strong>
+                                    <strong>{formatCredits(selectedPackage.credits)} <span>créditos</span></strong>
+                                    <small>Recarga concluída com sucesso</small>
                                 </div>
                                 <button
                                     type="button"
                                     className="checkout-submit-button"
                                     onClick={() => navigate("/creditos")}
                                 >
-                                    Ir para meus créditos
+                                    <span aria-hidden="true">→ </span>Ir para meus créditos
                                 </button>
                             </div>
                         ) : (
@@ -726,17 +727,6 @@ export default function Checkout() {
                                             <p className="checkout-pix-expiration">
                                                 Este Pix expira em até 24 horas.
                                             </p>
-                                        )}
-
-                                        {pixState.ticketUrl && (
-                                            <a
-                                                className="checkout-pix-ticket-link"
-                                                href={pixState.ticketUrl}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                            >
-                                                Abrir pagamento Pix
-                                            </a>
                                         )}
                                     </div>
                                 ) : (
