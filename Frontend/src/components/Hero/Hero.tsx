@@ -1,6 +1,6 @@
 import "./Hero.css";
 
-import HeroPreviewVideo from "../../assets/videos/hero-preview.mp4";
+import HeroImage from "../../assets/images/hero.webp";
 
 function Hero() {
 
@@ -45,18 +45,11 @@ function Hero() {
 
                     <div className="hero-preview">
 
-                        <video
+                        <img
                             className="hero-preview-video"
-                            autoPlay
-                            muted
-                            loop
-                            playsInline
-                        >
-                            <source
-                                src={HeroPreviewVideo}
-                                type="video/mp4"
-                            />
-                        </video>
+                            src={HeroImage}
+                            alt="Prévia dos recursos da plataforma"
+                        />
 
                     </div>
 
