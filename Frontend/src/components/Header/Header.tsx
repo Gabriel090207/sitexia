@@ -234,12 +234,29 @@ function Header() {
                                         src={user.photoURL}
                                         alt="Avatar"
                                         className="header-avatar-image"
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => navigate("/perfil")}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Enter" || event.key === " ") {
+                                                navigate("/perfil");
+                                            }
+                                        }}
                                     />
 
                                 ) : (
 
                                     <div
                                         className="header-avatar-letter"
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label="Ir para meu perfil"
+                                        onClick={() => navigate("/perfil")}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Enter" || event.key === " ") {
+                                                navigate("/perfil");
+                                            }
+                                        }}
                                     >
                                         {avatarLetter}
                                     </div>

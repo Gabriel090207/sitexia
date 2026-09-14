@@ -13,7 +13,7 @@ import {
 
 import db from "../../firebase/firestore";
 
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import {
     uploadFile,
@@ -38,12 +38,9 @@ import {
 
 import {
     createLibraryImage,
-    subscribeToLibraryImages,
 } from "../../services/library";
 
 export default function FaceSwap() {
-
-const navigate = useNavigate();
 
 const { user } = useAuth();
 
@@ -120,38 +117,6 @@ const generateBlockedMessage =
                         generationCost === 1 ? "crédito" : "créditos"
                     }.`
                     : "";
-
-const [libraryItems, setLibraryItems] =
-    useState<string[]>([]);
-
-
-useEffect(() => {
-
-    if (!user) {
-
-        setLibraryItems([]);
-
-        return;
-
-    }
-
-    const unsubscribe =
-        subscribeToLibraryImages(
-            user.uid,
-            (images) => {
-
-                setLibraryItems(images);
-
-            }
-        );
-
-    return () => {
-
-        unsubscribe();
-
-    };
-
-}, [user]);
 
 useEffect(() => {
 
@@ -781,78 +746,6 @@ async function sleep(
                    
               
 
-                    {/* =========================
-                        SIDEBAR
-                    ========================== */}
-
-                    <aside className="face-swap-sidebar">
-
-                        <div className="face-swap-sidebar-card">
-
-                            <div className="face-swap-library-header">
-
-                                <h2 className="face-swap-library-title">
-
-                                    Biblioteca
-
-                                </h2>
-
-                                <p className="face-swap-library-description">
-
-                                    Utilize imagens enviadas anteriormente ou faça um novo upload.
-
-                                </p>
-
-                            </div>
-
-                            <div className="face-swap-library-grid">
-
-                                {
-                                    Array.from({ length: 6 }).map((_, index) => {
-
-                                        const imageUrl = libraryItems[index];
-
-                                        return imageUrl ? (
-
-                                            <button
-                                                key={index}
-                                                type="button"
-                                                className="face-swap-library-item"
-                                            >
-
-                                                <img
-                                                    src={imageUrl}
-                                                    alt={`Geração ${index + 1}`}
-                                                    className="face-swap-library-image"
-                                                />
-
-                                            </button>
-
-                                        ) : (
-
-                                            <div
-                                                key={index}
-                                                className="face-swap-library-item face-swap-library-placeholder"
-                                            />
-
-                                        );
-
-                                    })
-                                }
-
-                            </div>
-
-                            <button
-                                className="face-swap-library-upload"
-                                type="button"
-                                onClick={() => navigate("/biblioteca")}
-                            >
-                                Ver biblioteca completa
-                            </button>
-
-                        </div>
-
-                    </aside>
 
                 </section>
 
