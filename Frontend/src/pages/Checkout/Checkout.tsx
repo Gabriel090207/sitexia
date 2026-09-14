@@ -1,9 +1,9 @@
 import { formatCredits } from "../../utils/formatCredits";
 import "./Checkout.css";
 
-import { useRef, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { CreditCard, QrCode, Zap } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { CheckCircle2, CreditCard, LoaderCircle, QrCode, Zap } from "lucide-react";
 
 import type { Plan } from "../../config/plans";
 import auth from "../../firebase/auth";
@@ -12,6 +12,7 @@ import {
     createPaymentAttempt,
     createPixOrder,
     createTopup,
+    getTopupStatus,
 } from "../../api/topups";
 import type { MercadoPagoInstance } from "../../types/mercadopago";
 
@@ -22,6 +23,8 @@ type PixStage =
     | "creating_attempt"
     | "creating_order"
     | "waiting_payment"
+    | "approved"
+    | "terminal"
     | "error";
 
 interface PixState {
@@ -57,6 +60,7 @@ interface CardState {
     statusDetail: string | null;
     error: string;
     retryAllowed: boolean;
+    creditsGranted: boolean;
 }
 
 const INITIAL_PIX_STATE: PixState = {
@@ -82,6 +86,7 @@ const INITIAL_CARD_STATE: CardState = {
     statusDetail: null,
     error: "",
     retryAllowed: true,
+    creditsGranted: false,
 };
 
 function isValidCpf(cpf: string) {
@@ -139,6 +144,7 @@ function isValidCardNumber(value: string) {
 
 export default function Checkout() {
     const location = useLocation();
+    const navigate = useNavigate();
     const selectedPackage = location.state?.plan as Plan | undefined;
 
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
@@ -153,13 +159,15 @@ export default function Checkout() {
     const pixRequestInFlight = useRef(false);
     const cardRequestInFlight = useRef(false);
     const mercadoPagoRef = useRef<MercadoPagoInstance | null>(null);
+    const statusRequestInFlight = useRef(false);
 
     const isPixLoading = [
         "creating_topup",
         "creating_attempt",
         "creating_order",
     ].includes(pixState.stage);
-    const hasActivePix = pixState.stage === "waiting_payment";
+    const hasActivePix = pixState.stage === "waiting_payment" ||
+        pixState.stage === "approved";
     const isCardSubmitting = [
         "creating_topup",
         "creating_attempt",
@@ -173,8 +181,90 @@ export default function Checkout() {
     const isPaymentMethodLocked = isPixLoading || hasActivePix ||
         isCardSubmitting || hasActiveCard;
 
+    const activeTopupId = paymentMethod === "pix"
+        ? (pixState.stage === "waiting_payment" ? pixState.topupId : null)
+        : (cardState.orderId && !cardState.creditsGranted &&
+            ["processing", "approved"].includes(cardState.stage)
+            ? cardState.topupId : null);
+
+    useEffect(() => {
+        if (!activeTopupId) return;
+
+        let cancelled = false;
+        let timer: ReturnType<typeof window.setTimeout> | undefined;
+        const terminalMessages: Record<string, string> = {
+            failed: "O pagamento falhou.",
+            cancelled: "O pagamento foi cancelado.",
+            expired: "O pagamento expirou.",
+            refunded: "O pagamento foi reembolsado.",
+        };
+
+        async function pollStatus() {
+            if (cancelled) return;
+            if (statusRequestInFlight.current) {
+                timer = window.setTimeout(pollStatus, 3000);
+                return;
+            }
+
+            statusRequestInFlight.current = true;
+            let finished = false;
+            try {
+                const topup = await getTopupStatus(activeTopupId!);
+                if (cancelled || topup.topup_id !== activeTopupId) return;
+
+                const approved = topup.status === "approved" &&
+                    topup.credits_granted === true;
+                const terminalError = terminalMessages[topup.status ?? ""];
+                finished = approved || Boolean(terminalError);
+
+                if (paymentMethod === "pix") {
+                    setPixState((current) => cancelled ||
+                        current.topupId !== activeTopupId ? current : {
+                            ...current,
+                            stage: approved ? "approved" : terminalError
+                                ? "terminal" : "waiting_payment",
+                            status: topup.status,
+                            statusDetail: topup.status_detail,
+                            error: terminalError ?? "",
+                        });
+                } else {
+                    setCardState((current) => cancelled ||
+                        current.topupId !== activeTopupId ? current : {
+                            ...current,
+                            stage: approved ? "approved" : terminalError
+                                ? "rejected" : "processing",
+                            status: topup.status,
+                            statusDetail: topup.status_detail,
+                            creditsGranted: approved,
+                            error: terminalError ?? "",
+                            retryAllowed: Boolean(terminalError) &&
+                                topup.status !== "refunded",
+                        });
+                }
+            } catch {
+                // Falha de consulta não confirma nem recusa o pagamento.
+            } finally {
+                statusRequestInFlight.current = false;
+                if (!cancelled && !finished) {
+                    timer = window.setTimeout(pollStatus, 3000);
+                }
+            }
+        }
+
+        void pollStatus();
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [activeTopupId, paymentMethod]);
+
     if (!selectedPackage) return <Navigate to="/creditos" replace />;
     const packageId = selectedPackage.id;
+    const isPaymentConfirmed = paymentMethod === "pix"
+        ? pixState.stage === "approved"
+        : cardState.stage === "approved" && cardState.creditsGranted === true;
+    const isConfirmingCardCredits = cardState.stage === "approved" ||
+        cardState.status === "approved";
 
     function selectPaymentMethod(method: PaymentMethod) {
         setPaymentMethod(method);
@@ -478,6 +568,7 @@ export default function Checkout() {
                 statusDetail: order.status_detail,
                 error: "",
                 retryAllowed: rejected,
+                creditsGranted: false,
             });
         } catch {
             setCardState((current) => ({
@@ -522,6 +613,29 @@ export default function Checkout() {
 
                 <section className="checkout-layout">
                     <div className="checkout-form-card">
+                        {isPaymentConfirmed ? (
+                            <div className="checkout-success checkout-success-confirmed" role="status">
+                                <div className="checkout-success-icon" aria-hidden="true">
+                                    <CheckCircle2 size={40} />
+                                </div>
+                                <h2 className="checkout-success-title">Pagamento confirmado!</h2>
+                                <p className="checkout-success-description">
+                                    Seus créditos já foram adicionados à sua conta.
+                                </p>
+                                <div className="checkout-success-credits">
+                                    <span>Pacote {selectedPackage.name}</span>
+                                    <strong>{formatCredits(selectedPackage.credits)} créditos</strong>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="checkout-submit-button"
+                                    onClick={() => navigate("/creditos")}
+                                >
+                                    Ir para meus créditos
+                                </button>
+                            </div>
+                        ) : (
+                        <>
                         <h2 className="checkout-card-title">Forma de pagamento</h2>
                         <p className="checkout-card-description">
                             Selecione como deseja pagar por esta recarga.
@@ -560,16 +674,27 @@ export default function Checkout() {
 
                         {paymentMethod === "pix" ? (
                             <div className="checkout-payment-content">
-                                {hasActivePix ? (
+                                {pixState.stage === "terminal" ? (
+                                    <p>Pagamento encerrado.</p>
+                                ) : hasActivePix ? (
                                     <div className="checkout-pix-payment">
                                         <div className="checkout-pix-status">
                                             <span className="checkout-pix-status-badge">
-                                                Aguardando pagamento
+                                                {pixState.status === "approved"
+                                                    ? "Confirmando créditos..."
+                                                    : pixState.status === "processing"
+                                                        ? "Pagamento em processamento"
+                                                        : "Aguardando pagamento"}
                                             </span>
                                             <p>
                                                 Seus créditos serão adicionados automaticamente
                                                 após a confirmação segura do pagamento.
                                             </p>
+                                        </div>
+
+                                        <div className="checkout-processing-confirmation" role="status">
+                                            <LoaderCircle className="checkout-processing-spinner" size={20} aria-hidden="true" />
+                                            <span>Aguardando confirmação do pagamento...</span>
                                         </div>
 
                                         <img
@@ -670,23 +795,30 @@ export default function Checkout() {
                                     "rejected",
                                     "processing",
                                 ].includes(cardState.stage) ? (
-                                    <div className={`checkout-card-result checkout-card-result-${cardState.stage}`}>
-                                        <CreditCard size={34} />
+                                    <div className={`checkout-card-result checkout-card-result-${
+                                        cardState.stage === "approved" && !cardState.creditsGranted
+                                            ? "processing" : cardState.stage
+                                    }`} role="status">
+                                        {cardState.stage === "rejected" ? (
+                                            <CreditCard size={34} aria-hidden="true" />
+                                        ) : (
+                                            <LoaderCircle className="checkout-processing-spinner" size={34} aria-hidden="true" />
+                                        )}
                                         <h3>
-                                            {cardState.stage === "approved"
-                                                ? "Pagamento aprovado"
-                                                : cardState.stage === "rejected"
-                                                    ? "Pagamento recusado"
+                                            {cardState.stage === "rejected"
+                                                ? "Pagamento encerrado"
+                                                : isConfirmingCardCredits
+                                                    ? "Pagamento aprovado"
                                                     : "Pagamento em processamento"}
                                         </h3>
                                         <p>
-                                            {cardState.stage === "approved"
-                                                ? "Pagamento aprovado. Confirmando créditos..."
-                                                : cardState.stage === "rejected"
-                                                    ? "Não foi possível aprovar este cartão. Confira os dados ou tente outro cartão."
-                                                    : "Recebemos o pagamento e estamos confirmando o resultado com segurança."}
+                                            {cardState.stage === "rejected"
+                                                ? cardState.error || "Não foi possível aprovar este cartão. Confira os dados ou tente outro cartão."
+                                                : isConfirmingCardCredits
+                                                    ? "Estamos confirmando seus créditos. Isso pode levar alguns segundos."
+                                                    : "Estamos aguardando a confirmação do pagamento. Isso pode levar alguns segundos."}
                                         </p>
-                                        {cardState.stage === "rejected" && (
+                                        {cardState.stage === "rejected" && cardState.retryAllowed && (
                                             <button
                                                 type="button"
                                                 className="checkout-submit-button"
@@ -802,6 +934,8 @@ export default function Checkout() {
                                     </p>
                                 )}
                             </div>
+                        )}
+                        </>
                         )}
                     </div>
 

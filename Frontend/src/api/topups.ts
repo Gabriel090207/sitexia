@@ -54,6 +54,22 @@ export interface CreateCardOrderResponse {
 }
 
 
+export interface TopupStatusResponse {
+    topup_id: string;
+    status: string | null;
+    status_detail: string | null;
+    credits_granted: boolean;
+}
+
+
+export async function getTopupStatus(topupId: string) {
+    const response = await api.get<TopupStatusResponse>(
+        `/topups/${topupId}/status`
+    );
+    return response.data;
+}
+
+
 export async function createTopup(packageId: string) {
     const response = await api.post<CreateTopupResponse>(
         "/topups",

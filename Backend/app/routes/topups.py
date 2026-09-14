@@ -641,6 +641,32 @@ def create_topup(
     }
 
 
+@router.get("/{topup_id}/status")
+def get_topup_status(
+    topup_id: str,
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
+):
+    topup_ref = db.collection("topups").document(topup_id)
+    topup_snapshot = topup_ref.get()
+
+    if not topup_snapshot.exists:
+        raise _not_found()
+
+    topup = topup_snapshot.to_dict()
+    if topup.get("uid") != current_user.uid:
+        raise _not_found()
+
+    return {
+        "topup_id": topup_id,
+        "status": topup.get("status"),
+        "status_detail": topup.get("status_detail"),
+        "credits_granted": topup.get("credits_granted") is True,
+    }
+
+
 @router.post(
     "/{topup_id}/payment-attempts",
     status_code=status.HTTP_201_CREATED,
