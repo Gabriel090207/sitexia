@@ -9,7 +9,7 @@ from google.api_core.exceptions import Aborted, DeadlineExceeded, ServiceUnavail
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -75,6 +75,15 @@ async def create_reserved_video(user_id, mode, duration, create_task, *task_args
         # 408 e 5xx não comprovam que o provedor deixou de criar a tarefa.
         if 400 <= error.response.status_code < 500 and error.response.status_code != 408:
             release_reserved_generation(generation_id)
+            if mode == "image-to-video":
+                logger.warning(
+                    "Image to Video rejeitado: status=%s generationId=%s",
+                    error.response.status_code, generation_id,
+                )
+                raise HTTPException(
+                    status_code=502,
+                    detail="O provedor não aceitou a solicitação de geração de vídeo.",
+                ) from None
         else:
             logger.exception("Criação ambígua; reserva mantida: generationId=%s", generation_id)
         raise
@@ -128,7 +137,7 @@ class ImageToVideoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     image_url: str
-    prompt: str
+    prompt: str = Field(max_length=1500)
     duration: int
 
 

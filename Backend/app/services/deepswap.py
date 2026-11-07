@@ -91,8 +91,11 @@ async def post(
         )
 
         print("POST", uri)
-        print("Request:", payload)
-        print("Response:", response.text)
+        if body.get("model") == "deepvid3.0-i2v":
+            print("Image to Video status:", response.status_code)
+        else:
+            print("Request:", payload)
+            print("Response:", response.text)
 
         response.raise_for_status()
 
@@ -229,7 +232,7 @@ async def create_image_to_video_task(
 ):
 
     payload = {
-        "model": "deepvid2.0-i2v",
+        "model": "deepvid3.0-i2v",
         "prompt": prompt,
         "duration": duration,
         "media": [
@@ -238,8 +241,7 @@ async def create_image_to_video_task(
                 "url": image_url
             }
         ],
-        "outputAudio": True,
-        "promptEnhance": True
+        "outputAudio": True
     }
 
     return await post(
