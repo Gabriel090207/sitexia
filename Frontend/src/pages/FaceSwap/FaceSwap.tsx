@@ -16,11 +16,13 @@ import db from "../../firebase/firestore";
 import { Link } from "react-router-dom";
 
 import {
-    uploadFile,
     uploadImageFromUrl,
 } from "../../services/storage";
+import { uploadScopedFile } from "../../services/scopedUploads";
 
 import { useAuth } from "../../contexts/AuthContext";
+import auth from "../../firebase/auth";
+import { allowAuthenticatedUpload } from "../../utils/uploadAuthorization";
 
 import {
     ArrowLeft,
@@ -42,7 +44,9 @@ import {
 
 export default function FaceSwap() {
 
-const { user } = useAuth();
+const { user, loading: authLoading } = useAuth();
+const [uploadAuthError, setUploadAuthError] = useState("");
+const canUpload = () => allowAuthenticatedUpload(user, authLoading, auth.currentUser, setUploadAuthError);
 
 const [credits, setCredits] = useState<number>(0);
 
@@ -230,6 +234,12 @@ async function sleep(
 
                 </header>
 
+                {uploadAuthError && (
+                    <div role="alert">
+                        {uploadAuthError} {!authLoading && <Link to="/entrar">Entrar</Link>}
+                    </div>
+                )}
+
                 <section className="face-swap-layout">
 
                     {/* =========================
@@ -366,6 +376,8 @@ async function sleep(
 
                                                         if (!file) return;
 
+                                                        if (!canUpload()) return;
+
                                                         setLoadingFile(true);
 
                                                         try{
@@ -385,9 +397,11 @@ async function sleep(
 
                                                             }
 
-                                                            const url = await uploadFile(
+                                                            if (!canUpload()) return;
+                                                            const url = await uploadScopedFile(
                                                                 file,
-                                                                "face-swap"
+                                                                "face-swap",
+                                                                user?.uid
                                                             );
 
                                                             setFileUrl(url);
@@ -492,13 +506,16 @@ async function sleep(
 
                                                     if (!file) return;
 
+                                                    if (!canUpload()) return;
+
                                                     setLoadingFace(true);
 
                                                     try{
 
-                                                        const url = await uploadFile(
+                                                        const url = await uploadScopedFile(
                                                             file,
-                                                            "face-swap-faces"
+                                                            "face-swap-faces",
+                                                            user?.uid
                                                         );
 
                                                         setFaceUrl(url);
@@ -557,13 +574,16 @@ async function sleep(
 
                                                     if (!file) return;
 
+                                                    if (!canUpload()) return;
+
                                                     setLoadingFace(true);
 
                                                     try{
 
-                                                        const url = await uploadFile(
+                                                        const url = await uploadScopedFile(
                                                             file,
-                                                            "face-swap-faces"
+                                                            "face-swap-faces",
+                                                            user?.uid
                                                         );
 
                                                         setFaceUrl(url);

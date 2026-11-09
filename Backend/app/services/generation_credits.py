@@ -7,6 +7,7 @@ externa de sucesso/falha cabe ao chamador; este módulo não consulta provedores
 import hashlib
 import json
 import math
+from copy import deepcopy
 
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -15,6 +16,14 @@ from app.services.firebase import db
 
 
 GENERATIONS_COLLECTION = "generations"
+
+
+class ReservationConflict(ValueError):
+    """An operation key already identifies a different intent."""
+
+
+class InsufficientCredits(ValueError):
+    """Available credits cannot cover the reservation."""
 
 
 def get_generation_by_task_for_user(task_id: str, user_id: str) -> dict | None:
@@ -69,7 +78,7 @@ def _generation(transaction, generation_id):
 
 
 @firestore.transactional
-def _reserve(transaction, generation_id, user_id, cost, generation_type, mode):
+def _reserve(transaction, generation_id, user_id, cost, generation_type, mode, reservation_intent=None):
     generation_ref = db.collection(GENERATIONS_COLLECTION).document(generation_id)
     user_ref = db.collection("users").document(user_id)
     generation_snapshot = generation_ref.get(transaction=transaction)
@@ -79,8 +88,10 @@ def _reserve(transaction, generation_id, user_id, cost, generation_type, mode):
     if generation_snapshot.exists:
         existing = generation_snapshot.to_dict()
         expected = {"userId": user_id, "cost": cost, "type": generation_type, "mode": mode}
+        if reservation_intent is not None:
+            expected["reservationIntent"] = reservation_intent
         if any(existing.get(key) != value for key, value in expected.items()):
-            raise ValueError("A operação já existe com dados diferentes.")
+            raise ReservationConflict("A operação já existe com dados diferentes.")
         # Operações terminadas também nunca são reservadas novamente.
         return existing
 
@@ -88,7 +99,7 @@ def _reserve(transaction, generation_id, user_id, cost, generation_type, mode):
     credits = _amount(user.get("credits", 0))
     reserved = _amount(user.get("reservedCredits", 0))
     if credits - reserved < cost:
-        raise ValueError("Créditos insuficientes.")
+        raise InsufficientCredits("Créditos insuficientes.")
     generation = {
         "generationId": generation_id,
         "userId": user_id,
@@ -101,6 +112,8 @@ def _reserve(transaction, generation_id, user_id, cost, generation_type, mode):
         "createdAt": firestore.SERVER_TIMESTAMP,
         "updatedAt": firestore.SERVER_TIMESTAMP,
     }
+    if reservation_intent is not None:
+        generation["reservationIntent"] = reservation_intent
     transaction.create(generation_ref, generation)
     transaction.update(user_ref, {"reservedCredits": reserved + cost})
     return generation
@@ -112,6 +125,8 @@ def reserve_generation_credits(
     cost: float,
     generation_type: str,
     mode: str | None = None,
+    *,
+    reservation_intent: dict | None = None,
 ) -> dict:
     _identifier(user_id)
     if not isinstance(operation_id, str) or not operation_id.strip():
@@ -125,7 +140,15 @@ def reserve_generation_credits(
     generation_id = hashlib.sha256(
         json.dumps([user_id, operation_id], ensure_ascii=False).encode("utf-8")
     ).hexdigest()
-    return _reserve(db.transaction(), generation_id, user_id, cost, generation_type, mode)
+    if reservation_intent is None:
+        # Preserve the existing callers and their document shape.
+        return _reserve(db.transaction(), generation_id, user_id, cost, generation_type, mode)
+    if not isinstance(reservation_intent, dict):
+        raise ValueError("Intenção da reserva inválida.")
+    return _reserve(
+        db.transaction(), generation_id, user_id, cost, generation_type, mode,
+        deepcopy(reservation_intent),
+    )
 
 
 @firestore.transactional
@@ -147,8 +170,8 @@ def attach_generation_task(generation_id: str, task_id: str) -> dict:
     return _attach(db.transaction(), generation_id, _identifier(task_id))
 
 
-@firestore.transactional
-def _finalize(transaction, generation_id, charge):
+def finalize_generation_in_transaction(transaction, generation_id, charge):
+    """Internal server primitive; caller owns the transaction and evidence checks."""
     ref, generation = _generation(transaction, generation_id)
     credit_status = generation.get("creditStatus")
     if credit_status in ("charged", "released"):
@@ -175,6 +198,11 @@ def _finalize(transaction, generation_id, charge):
     transaction.update(user_ref, user_updates)
     transaction.update(ref, updates)
     return {**generation, **updates}
+
+
+@firestore.transactional
+def _finalize(transaction, generation_id, charge):
+    return finalize_generation_in_transaction(transaction, generation_id, charge)
 
 
 def charge_reserved_generation(generation_id: str) -> dict:

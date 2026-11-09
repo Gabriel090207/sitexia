@@ -33,6 +33,9 @@ import {
 } from "../../services/storage";
 
 import { useAuth } from "../../contexts/AuthContext";
+import auth from "../../firebase/auth";
+import { allowAuthenticatedUpload } from "../../utils/uploadAuthorization";
+import { uploadScopedFile } from "../../services/scopedUploads";
 
 import {
     createLibraryVideo,
@@ -51,7 +54,7 @@ import {
 
 export default function VideoGeneration() {
 
-const { user } = useAuth();
+const { user, loading: authLoading } = useAuth();
 
 const [credits, setCredits] =
     useState<number>(0);
@@ -280,7 +283,7 @@ async function handleImageChange(
         return;
     }
 
-
+    if (!allowAuthenticatedUpload(user, authLoading, auth.currentUser, setError)) return;
 
     const previewUrl =
         URL.createObjectURL(file);
@@ -296,9 +299,10 @@ async function handleImageChange(
         setIsUploading(true);
 
         const uploadedUrl =
-            await uploadFile(
+            await uploadScopedFile(
                 file,
-                "video-generation"
+                "video-generation",
+                user?.uid
             );
 
         setImageUrl(uploadedUrl);

@@ -1,3 +1,4 @@
+import { processImageResults } from "./processImageResults";
 import { formatCredits } from "../../utils/formatCredits";
 import "./ImageGeneration.css";
 import { getGenerationErrorMessage } from "../../utils/generationErrors";
@@ -116,9 +117,10 @@ const hasEnoughCredits =
         useState("");
 
 const [
-    generatedImageUrl,
-    setGeneratedImageUrl,
-] = useState("");
+    generatedImageUrls,
+    setGeneratedImageUrls,
+] = useState<string[]>([]);
+const generationInFlight = useRef(false);
 
 
 const canGenerate =
@@ -334,6 +336,8 @@ async function waitForImageTask(
 
 async function handleGenerateImage() {
 
+    if (generationInFlight.current) return;
+
     if (!user) {
 
         setError(
@@ -354,11 +358,12 @@ async function handleGenerateImage() {
 
     }
 
+    generationInFlight.current = true;
     try {
 
         setIsGenerating(true);
         setError("");
-        setGeneratedImageUrl("");
+        setGeneratedImageUrls([]);
 
         // 1. Cria a task na DeepSwap
         const task =
@@ -379,38 +384,24 @@ async function handleGenerateImage() {
 
        
 
-        if (!result.videoUrl) {
-
-            throw new Error(
-                "A API não retornou a imagem gerada."
-            );
-
-        }
-
-     
-
-        // 3. Salva a imagem no Firebase Storage
-        const firebaseImageUrl =
-            await uploadImageFromUrl(
-                result.videoUrl,
-                `users/${user.uid}/images`
-            );
-
-       
-
-        // 4. Registra na biblioteca / Firestore
-        await createLibraryImage(
+        const outcome = await processImageResults(
+            result.imageUrls,
             user.uid,
-            firebaseImageUrl,
-            "image-generation"
+            crypto.randomUUID(),
+            {
+                upload: uploadImageFromUrl,
+                register: createLibraryImage,
+                onSaved: (url) => setGeneratedImageUrls((saved) => [...saved, url]),
+            },
         );
-
-     
-
-        // 5. Exibe o resultado permanente
-        setGeneratedImageUrl(
-            firebaseImageUrl
-        );
+        const warnings: string[] = [];
+        if (outcome.uploadFailures) {
+            warnings.push(`${outcome.uploadFailures} de ${outcome.total} imagens não puderam ser baixadas ou salvas. As imagens salvas estão exibidas no resultado.`);
+        }
+        if (outcome.libraryFailures) {
+            warnings.push(`${outcome.libraryFailures} imagens foram salvas e estão exibidas, mas não puderam ser registradas na biblioteca.`);
+        }
+        if (warnings.length) setError(warnings.join(" "));
 
     } catch (error) {
 
@@ -422,12 +413,15 @@ async function handleGenerateImage() {
         setError(
             getGenerationErrorMessage(
                 error,
-                "Não foi possível gerar a imagem. Tente novamente."
+                error instanceof Error && error.message === "A API retornou uma URL de imagem inválida."
+                    ? error.message
+                    : "Não foi possível gerar a imagem. Tente novamente."
             )
         );
 
     } finally {
 
+        generationInFlight.current = false;
         setIsGenerating(false);
 
     }
@@ -898,15 +892,18 @@ async function handleGenerateImage() {
 
                                 </div>
 
-                            ) : generatedImageUrl ? (
+                            ) : generatedImageUrls.length > 0 ? (
 
                                 <div className="image-generation-result-ready">
 
-                                    <img
-                                        src={generatedImageUrl}
-                                        alt="Imagem gerada"
-                                        className="image-generation-result-image"
-                                    />
+                                    {generatedImageUrls.map((url, index) => (
+                                        <img
+                                            key={`${index}-${url}`}
+                                            src={url}
+                                            alt={`Imagem gerada ${index + 1}`}
+                                            className="image-generation-result-image"
+                                        />
+                                    ))}
 
                                 </div>
 

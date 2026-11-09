@@ -93,6 +93,8 @@ async def post(
         print("POST", uri)
         if body.get("model") == "deepvid3.0-i2v":
             print("Image to Video status:", response.status_code)
+        elif uri in ("/openapi/v1/face-swap/materials", "/openapi/v1/face-swap/tasks"):
+            print("Face Swap creation status:", response.status_code)
         else:
             print("Request:", payload)
             print("Response:", response.text)
@@ -152,7 +154,8 @@ async def get_material(
 ):
 
     return await get(
-        f"/openapi/v1/face-swap/materials/{material_id}"
+        f"/openapi/v1/face-swap/materials/{material_id}",
+        log_response=False,
     )
 
 async def create_task(
