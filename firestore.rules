@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function profile(data) {
+      return (data.email == null || data.email is string)
+          && data.displayName is string && data.photoURL is string;
+    }
+    match /users/{uid} {
+      allow get: if owner(uid);
+      allow list, delete: if false;
+      // Existing signup contract: initialize only a zero balance and free plan.
+      // All subsequent balance/reservation/payment changes are backend-only.
+      allow create: if owner(uid)
+          && request.resource.data.keys().hasOnly([
+            'uid', 'email', 'displayName', 'photoURL', 'plan', 'credits', 'createdAt'
+          ])
+          && request.resource.data.uid == uid
+          && request.resource.data.plan == 'free'
+          && request.resource.data.credits is number
+          && request.resource.data.credits == 0
+          && request.resource.data.createdAt == request.time
+          && profile(request.resource.data);
+      allow update: if owner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['email', 'displayName', 'photoURL'])
+          && profile(request.resource.data);
+    }
+    match /users/{uid}/swaps/{itemId} {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid)
+          && request.resource.data.keys().hasOnly([
+            'imageUrl', 'videoUrl', 'taskId', 'type', 'mediaType', 'createdAt'
+          ])
+          && (request.resource.data.get('imageUrl', null) is string
+              || request.resource.data.get('videoUrl', null) is string)
+          && request.resource.data.get('type', 'face-swap')
+              in ['face-swap', 'image-generation', 'video-generation']
+          && request.resource.data.get('mediaType', 'image') in ['image', 'video']
+          && request.resource.data.createdAt is timestamp;
+    }
+    // Admin SDK uses IAM, not these client rules. Financial/history/payment,
+    // ownership and unknown documents have no direct frontend access.
+    // Includes generations, topups/payment_attempts, credit_transactions,
+    // subscriptions, users/{uid}/subscriptions, face_swap_tasks/materials.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

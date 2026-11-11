@@ -1,10 +1,27 @@
 {
-  "storage": { "rules": "storage.rules" },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "emulators": {
-    "storage": { "host": "127.0.0.1", "port": 9398 },
-    "hub": { "host": "127.0.0.1", "port": 4409 },
-    "logging": { "host": "127.0.0.1", "port": 4509 },
-    "ui": { "enabled": false },
-    "singleProjectMode": true
+    "storage": {
+      "host": "127.0.0.1",
+      "port": 9398
+    },
+    "hub": {
+      "host": "127.0.0.1",
+      "port": 4409
+    },
+    "logging": {
+      "host": "127.0.0.1",
+      "port": 4509
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true,
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9397
+    }
   }
 }

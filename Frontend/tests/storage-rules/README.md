@@ -8,9 +8,9 @@ If the test dependencies live outside the frontend, set
 ```sh
 rules_test_dir=$(mktemp -d)
 cp storage.rules Frontend/tests/storage-rules/firebase.json "$rules_test_dir/"
-firebase emulators:exec --project demo-xiaswap-private-rules --only storage \
+firebase emulators:exec --project demo-xiaswap-private-rules --only auth,storage \
   --config "$rules_test_dir/firebase.json" \
-  "node --test Frontend/tests/storage-rules/privateStorage.emulator.mjs"
+  "node --test --test-concurrency=1 Frontend/tests/storage-rules/privateStorage.emulator.mjs Frontend/tests/storage-rules/authStorage.emulator.mjs"
 ```
 
 The temporary copy is necessary because the CLI rejects rules outside the directory
@@ -34,3 +34,8 @@ Passing these tests does not validate real V4 signatures, IAM, ACLs, CORS, brows
 playback or revocation of existing Firebase download tokens. Objects outside an
 owner namespace have no client access under these rules. Coordinate publication
 with current private consumers and audit legacy access before production rollout.
+
+The Auth integration suite uses two synthetic Auth Emulator accounts and one
+signed-out session, with SDK reads/writes sent only to loopback. It also verifies
+access denial after sign-out. Auth runs on 127.0.0.1:9397; Storage on 127.0.0.1:9398.
+Sequential test files prevent privileged fixture clearing from racing other tests.
