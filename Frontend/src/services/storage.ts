@@ -1,10 +1,10 @@
 import {
     ref,
     uploadBytes,
-    getDownloadURL,
 } from "firebase/storage";
 
 import storage from "../firebase/storage";
+import { storageReferenceAddress } from "./storageReferences";
 
 export async function uploadFile(
     file: File,
@@ -22,14 +22,12 @@ export async function uploadFile(
         `${folder}/${fileName}`
     );
 
-    await uploadBytes(
+    const snapshot = await uploadBytes(
         storageRef,
         file
     );
 
-    return await getDownloadURL(
-        storageRef
-    );
+    return storageReferenceAddress(snapshot.ref);
 
 }
 
@@ -62,7 +60,7 @@ export async function uploadImageFromUrl(
         `${folder}/${fileName}`
     );
 
-    await uploadBytes(
+    const snapshot = await uploadBytes(
         storageRef,
         blob,
         {
@@ -70,7 +68,5 @@ export async function uploadImageFromUrl(
         }
     );
 
-    return await getDownloadURL(
-        storageRef
-    );
+    return storageReferenceAddress(snapshot.ref);
 }

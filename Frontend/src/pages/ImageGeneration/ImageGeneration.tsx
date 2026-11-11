@@ -1,3 +1,5 @@
+import PrivateGeneratedImage from "./PrivateGeneratedImage";
+import auth from "../../firebase/auth";
 import { processImageResults } from "./processImageResults";
 import { formatCredits } from "../../utils/formatCredits";
 import "./ImageGeneration.css";
@@ -117,9 +119,16 @@ const hasEnoughCredits =
         useState("");
 
 const [
-    generatedImageUrls,
-    setGeneratedImageUrls,
-] = useState<string[]>([]);
+    generatedImages,
+    setGeneratedImages,
+] = useState<{ url: string; owner: NonNullable<typeof user> }[]>([]);
+const visibleImages = generatedImages.filter(image => image.owner === user);
+const pageMounted = useRef(false);
+useEffect(() => {
+    pageMounted.current = true;
+    return () => { pageMounted.current = false; };
+}, []);
+useEffect(() => { setGeneratedImages([]); }, [user]);
 const generationInFlight = useRef(false);
 
 
@@ -363,7 +372,7 @@ async function handleGenerateImage() {
 
         setIsGenerating(true);
         setError("");
-        setGeneratedImageUrls([]);
+        setGeneratedImages([]);
 
         // 1. Cria a task na DeepSwap
         const task =
@@ -391,7 +400,12 @@ async function handleGenerateImage() {
             {
                 upload: uploadImageFromUrl,
                 register: createLibraryImage,
-                onSaved: (url) => setGeneratedImageUrls((saved) => [...saved, url]),
+                onSaved: (url) => {
+                    // Presentation only: storage and library registration stay unchanged.
+                    if (pageMounted.current && auth.currentUser === user) {
+                        setGeneratedImages((saved) => [...saved, { url, owner: user }]);
+                    }
+                },
             },
         );
         const warnings: string[] = [];
@@ -892,16 +906,16 @@ async function handleGenerateImage() {
 
                                 </div>
 
-                            ) : generatedImageUrls.length > 0 ? (
+                            ) : visibleImages.length > 0 ? (
 
                                 <div className="image-generation-result-ready">
 
-                                    {generatedImageUrls.map((url, index) => (
-                                        <img
+                                    {visibleImages.map(({ url, owner }, index) => (
+                                        <PrivateGeneratedImage
                                             key={`${index}-${url}`}
-                                            src={url}
-                                            alt={`Imagem gerada ${index + 1}`}
-                                            className="image-generation-result-image"
+                                            value={url}
+                                            uid={owner.uid}
+                                            index={index}
                                         />
                                     ))}
 

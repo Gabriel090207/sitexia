@@ -4,6 +4,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from firebase_admin import firestore
+from app.services.firestore_transactions import isolated_transactional
 from pydantic import BaseModel, ConfigDict
 
 from app.config.packages import PACKAGES
@@ -239,7 +240,7 @@ def _order_fields(order: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@firestore.transactional
+@isolated_transactional
 def claim_pix_order_creation(
     transaction,
     topup_ref,
@@ -300,7 +301,7 @@ def claim_pix_order_creation(
     return {"amount": amount}
 
 
-@firestore.transactional
+@isolated_transactional
 def persist_pix_order(
     transaction,
     topup_ref,
@@ -331,7 +332,7 @@ def persist_pix_order(
     return {**attempt, **order_fields}
 
 
-@firestore.transactional
+@isolated_transactional
 def release_pix_order_creation(
     transaction,
     topup_ref,
@@ -369,7 +370,7 @@ def release_pix_order_creation(
         )
 
 
-@firestore.transactional
+@isolated_transactional
 def claim_card_order_creation(
     transaction,
     topup_ref,
@@ -455,7 +456,7 @@ def claim_card_order_creation(
     }
 
 
-@firestore.transactional
+@isolated_transactional
 def persist_card_order(
     transaction,
     topup_ref,
@@ -497,7 +498,7 @@ def persist_card_order(
     return {**attempt, **persisted_fields}
 
 
-@firestore.transactional
+@isolated_transactional
 def release_card_order_creation(
     transaction,
     topup_ref,
@@ -535,7 +536,7 @@ def release_card_order_creation(
         )
 
 
-@firestore.transactional
+@isolated_transactional
 def create_payment_attempt_transaction(
     transaction,
     topup_ref,

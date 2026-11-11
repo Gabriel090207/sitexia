@@ -1,6 +1,8 @@
 import hashlib
 import hmac
 import json
+import logging
+from contextvars import ContextVar
 import os
 import time
 
@@ -72,69 +74,92 @@ def _sign(
     return headers, payload
 
 
-async def post(
-    uri: str,
-    body: dict
-):
-    headers, payload = _sign(
-        "POST",
-        uri,
-        body
-    )
-
-    async with httpx.AsyncClient() as client:
-
-        response = await client.post(
-            f"{BASE_URL}{uri}",
-            headers=headers,
-            content=payload
-        )
-
-        print("POST", uri)
-        if body.get("model") == "deepvid3.0-i2v":
-            print("Image to Video status:", response.status_code)
-        elif uri in ("/openapi/v1/face-swap/materials", "/openapi/v1/face-swap/tasks"):
-            print("Face Swap creation status:", response.status_code)
-        else:
-            print("Request:", payload)
-            print("Response:", response.text)
-
-        response.raise_for_status()
-
-        return response.json()
+logger = logging.getLogger(__name__)
+_transport_private = ContextVar("deepswap_private_logging", default=False)
 
 
-async def get(
-    uri: str,
-    query: str = "",
-    *,
-    log_response: bool = True,
-):
-    headers, _ = _sign(
-        "GET",
-        uri,
-        query=query
-    )
+class _PrivateTransportLogs(logging.Filter):
+    def filter(self, record):
+        # httpx INFO includes the full URL; httpcore DEBUG can include headers.
+        # Only suppress transport diagnostics in this async request context.
+        return not _transport_private.get()
 
-    async with httpx.AsyncClient() as client:
 
-        response = await client.get(
-            f"{BASE_URL}{uri}",
-            headers=headers,
-            params=query
-        )
+for _name in ("httpx", "httpcore.connection", "httpcore.http11", "httpcore.http2",
+              "httpcore.proxy", "httpcore.socks"):
+    logging.getLogger(_name).addFilter(_PrivateTransportLogs())
 
-        if log_response:
-            print("===================================")
-            print("GET:", f"{BASE_URL}{uri}")
-            print("STATUS:", response.status_code)
-            print("BODY:")
-            print(response.text)
-            print("===================================")
 
-        response.raise_for_status()
+def _operation(uri):
+    # Never log caller-supplied paths, query strings, task IDs or model names.
+    if uri == "/openapi/v1/aigc/image-generation/tasks":
+        return "image_creation"
+    if uri == "/openapi/v1/aigc/video-generation/tasks":
+        return "video_creation"
+    if uri == "/openapi/v1/face-swap/tasks":
+        return "face_swap_creation"
+    if uri == "/openapi/v1/face-swap/materials":
+        return "material_creation"
+    if uri.startswith("/openapi/v1/face-swap/materials/"):
+        return "material_status"
+    if uri.startswith("/openapi/v1/tasks/"):
+        return "task_status"
+    return "provider_request"
 
-        return response.json()
+
+def _safe_exception(error):
+    # Preserve the HTTP classification and response for existing callers, but
+    # never let the default exception text print a URL or provider body.
+    if isinstance(error, httpx.HTTPStatusError):
+        return httpx.HTTPStatusError("DeepSwap HTTP failure.", request=error.request, response=error.response)
+    if isinstance(error, httpx.RequestError):
+        return type(error)("DeepSwap transport failure.", request=error.request)
+    if isinstance(error, json.JSONDecodeError):
+        return json.JSONDecodeError("Invalid DeepSwap JSON response", "", 0)
+    if isinstance(error, ValueError):
+        return ValueError("Invalid DeepSwap response.")
+    return RuntimeError("DeepSwap request failed.")
+
+
+async def _request(method, uri, body=None, query=""):
+    started = time.monotonic()
+    operation = _operation(uri)
+    code = None
+    context = _transport_private.set(True)
+    try:
+        headers, payload = _sign(method, uri, body, query)
+        async with httpx.AsyncClient() as client:
+            if method == "POST":
+                response = await client.post(f"{BASE_URL}{uri}", headers=headers, content=payload)
+            else:
+                response = await client.get(f"{BASE_URL}{uri}", headers=headers, params=query)
+            code = response.status_code
+            response.raise_for_status()
+            result = response.json()
+        status = result.get("taskStatus", result.get("status")) if isinstance(result, dict) else None
+        status = status if isinstance(status, str) and status in {"PENDING", "RUNNING", "SUCCEEDED", "FAILED", "UNKNOWN"} else "UNSPECIFIED"
+        logger.info("DeepSwap operation=%s method=%s http_status=%s task_status=%s duration_ms=%d",
+                    operation, method, code, status, (time.monotonic() - started) * 1000)
+        return result
+    except Exception as error:
+        category = ("http" if isinstance(error, httpx.HTTPStatusError) else
+                    "timeout" if isinstance(error, httpx.TimeoutException) else
+                    "network" if isinstance(error, httpx.RequestError) else
+                    "invalid_response" if isinstance(error, (ValueError, json.JSONDecodeError)) else "unexpected")
+        logger.warning("DeepSwap operation=%s method=%s http_status=%s error_category=%s duration_ms=%d",
+                       operation, method, code, category, (time.monotonic() - started) * 1000)
+        raise _safe_exception(error) from None
+    finally:
+        _transport_private.reset(context)
+
+
+async def post(uri: str, body: dict):
+    return await _request("POST", uri, body)
+
+
+async def get(uri: str, query: str = "", *, log_response: bool = True):
+    # Keep the legacy argument for callers; response bodies are never logged.
+    return await _request("GET", uri, query=query)
 
 
 async def create_material(
@@ -218,7 +243,7 @@ async def create_text_to_video_task(
 async def get_video_task(
     task_id: str,
     *,
-    log_response: bool = True,
+    log_response: bool = False,
 ):
 
     

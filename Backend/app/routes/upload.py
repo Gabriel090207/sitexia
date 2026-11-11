@@ -1,21 +1,18 @@
-from fastapi import APIRouter
-from fastapi import File
-from fastapi import UploadFile
+import logging
 
-from app.services.storage import upload_image
+from fastapi import APIRouter, HTTPException
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/upload",
-    tags=["Upload"]
+    tags=["Upload"],
 )
 
 
-@router.post("")
-async def upload(
-    file: UploadFile = File(...)
-):
-    image_url = await upload_image(file)
-
-    return {
-        "url": image_url
-    }
+@router.post("", deprecated=True)
+async def upload():
+    # Do not bind or read the request body, or import the legacy Storage service.
+    logger.warning("legacy_upload_endpoint_access method=POST status=410")
+    raise HTTPException(status_code=410, detail="Este endpoint foi descontinuado.")

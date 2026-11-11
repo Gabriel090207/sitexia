@@ -1,4 +1,3 @@
-import math
 import json
 import logging
 from typing import Annotated, Literal
@@ -7,13 +6,13 @@ from urllib.parse import urlsplit
 import httpx
 
 from fastapi import APIRouter
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Header
 
 from pydantic import BaseModel, ConfigDict
 
 from app.dependencies.auth import AuthenticatedUser, get_current_user
-from app.services.firebase import db
-from app.services.face_swap_tasks import normalize_swap_id, register_task_owner, require_task_owner
+from app.services.face_swap_submission import submit_face_swap, finalize_linked_task, prepare_original_url
+from app.services.face_swap_tasks import normalize_swap_id, require_task_owner
 from app.services.face_swap_materials import (
     normalize_material_id,
     register_material_owner,
@@ -24,7 +23,6 @@ from app.services.deepswap import (
     create_material,
     get_material,
     create_task,
-    get_task,
     get as get_deep_response,
 )
 
@@ -33,50 +31,6 @@ router = APIRouter(
     prefix="/swap",
     tags=["Face Swap"],
 )
-
-
-from google.cloud import firestore
-
-
-@firestore.transactional
-def deduct_credits(
-    transaction,
-    user_ref,
-    cost: float
-):
-
-    snapshot = user_ref.get(
-        transaction=transaction
-    )
-
-    if not snapshot.exists:
-        raise HTTPException(
-            status_code=404,
-            detail="Usuário não encontrado."
-        )
-
-    user_data = snapshot.to_dict()
-
-    current_credits = float(
-        user_data.get("credits") or 0
-    )
-
-    if current_credits < cost:
-        raise HTTPException(
-            status_code=402,
-            detail="Créditos insuficientes."
-        )
-
-    new_credits = current_credits - cost
-
-    transaction.update(
-        user_ref,
-        {
-            "credits": new_credits
-        }
-    )
-
-    return new_credits
 
 
 class CreateMaterialRequest(BaseModel):
@@ -91,42 +45,12 @@ class CreateSwapTaskRequest(BaseModel):
     material_id: str
     source_face_id: str
     target_face_url: str
-    media_type: Literal["image", "gif", "video"]
+    media_type: Literal["image", "gif", "video"] | None = None
     video_duration: float | None = None
 
 
 class ResolveTaskRequest(BaseModel):
     task_id: str
-
-
-def calculate_swap_cost(
-    media_type: str,
-    video_duration: float | None = None,
-) -> float:
-
-    if media_type == "image":
-        return 0.1
-
-    if media_type == "gif":
-        return 1.0
-
-    if media_type == "video":
-        if (
-            video_duration is None
-            or not math.isfinite(video_duration)
-            or video_duration <= 0
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail="Duração do vídeo inválida."
-            )
-
-        return float(max(1, math.ceil(video_duration / 15)))
-
-    raise HTTPException(
-        status_code=400,
-        detail="Tipo de mídia inválido."
-    )
 
 
 @router.post("/material")
@@ -138,8 +62,9 @@ async def create_swap_material(
     ],
 ):
 
+    signed_url = prepare_original_url(current_user.uid, request.image_url)
     try:
-        material = await create_material(request.image_url)
+        material = await create_material(signed_url)
     except (httpx.HTTPError, json.JSONDecodeError):
         raise HTTPException(502, "Não foi possível criar o material na Deep.") from None
     try:
@@ -185,70 +110,23 @@ async def get_swap_material(
 @router.post("/task")
 async def create_swap_task(
     request: CreateSwapTaskRequest,
-    current_user: Annotated[
-        AuthenticatedUser,
-        Depends(get_current_user),
-    ],
+    current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1,
+                                         max_length=128, pattern=r"^[A-Za-z0-9_-]+$")],
 ):
     try:
         material_id = normalize_material_id(request.material_id)
         source_face_id = normalize_swap_id(request.source_face_id)
     except ValueError:
         raise HTTPException(400, "Identificador de material ou rosto inválido.") from None
-    # Authenticate ownership and provider data before the existing debit.
-    material = await get_swap_material(material_id, current_user)
-    if material.get("status") != "SUCCEEDED":
-        raise HTTPException(409, "O material não está pronto para Face Swap.")
-    faces = material.get("faces")
-    if not isinstance(faces, list):
-        raise HTTPException(502, "A Deep retornou dados de rostos inválidos.")
-    try:
-        face_ids = {
-            normalize_swap_id(face.get("id"))
-            for face in faces if isinstance(face, dict)
-        }
-    except ValueError:
-        raise HTTPException(502, "A Deep retornou dados de rostos inválidos.") from None
-    if source_face_id not in face_ids:
-        raise HTTPException(400, "O rosto não pertence ao material informado.")
-    cost = calculate_swap_cost(
-        request.media_type,
-        request.video_duration,
+    # Ownership is checked on replays too; provider metadata is only fetched for
+    # a new intent. Client media_type/video_duration never determine the price.
+    require_material_owner(material_id, current_user.uid)
+    return await submit_face_swap(
+        current_user.uid, idempotency_key, material_id, source_face_id,
+        request.target_face_url,
+        lambda identifier: get_swap_material(identifier, current_user), create_task,
     )
-
-    user_ref = (
-        db.collection("users")
-        .document(current_user.uid)
-    )
-
-    transaction = db.transaction()
-
-    remaining_credits = deduct_credits(
-        transaction,
-        user_ref,
-        cost,
-    )
-
-    try:
-        task = await create_task(material_id, source_face_id, request.target_face_url)
-    except (httpx.HTTPError, json.JSONDecodeError):
-        raise HTTPException(502, "Não foi possível criar a tarefa na Deep.") from None
-    try:
-        task_id = normalize_swap_id(task.get("taskId") if isinstance(task, dict) else None)
-    except ValueError:
-        logging.getLogger(__name__).warning(
-            "Deep returned task without valid ID: uid=%s materialId=%s", current_user.uid, material_id,
-        )
-        raise HTTPException(502, "A Deep retornou uma tarefa inválida.") from None
-    try:
-        register_task_owner(task_id, current_user.uid, material_id, source_face_id)
-    except HTTPException:
-        logging.getLogger(__name__).warning(
-            "Task ownership not saved; investigate orphan: taskId=%s uid=%s materialId=%s",
-            task_id, current_user.uid, material_id,
-        )
-        raise
-    return task
 
 @router.get("/task/{task_id}")
 async def get_swap_task(
@@ -260,6 +138,7 @@ async def get_swap_task(
     except ValueError:
         raise HTTPException(404, "Tarefa não encontrada.") from None
     require_task_owner(task_id, current_user.uid)
+    financial = await finalize_linked_task(current_user.uid, task_id)
     try:
         task = await get_deep_response(f"/openapi/v1/tasks/{task_id}", log_response=False)
         returned_id = normalize_swap_id(task.get("taskId") if isinstance(task, dict) else None)
@@ -267,6 +146,8 @@ async def get_swap_task(
         raise HTTPException(502, "Não foi possível consultar a tarefa na Deep.") from None
     if returned_id != task_id:
         raise HTTPException(502, "A Deep retornou uma tarefa inválida.")
+    if financial is not None and financial.get("creditStatus") in ("charged", "released"):
+        task["taskStatus"] = financial["status"]
     return task
 
 
@@ -281,6 +162,7 @@ async def get_swap_result(
     except ValueError:
         raise HTTPException(404, "Tarefa não encontrada.") from None
     require_task_owner(task_id, current_user.uid)
+    financial = await finalize_linked_task(current_user.uid, task_id)
 
     try:
         task = await get_deep_response(
@@ -297,7 +179,8 @@ async def get_swap_result(
     if not isinstance(task, dict):
         raise HTTPException(status_code=502, detail="Resposta inválida da Deep.")
 
-    status = task.get("taskStatus")
+    status = (financial["status"] if financial is not None and financial.get("creditStatus") in ("charged", "released")
+              else task.get("taskStatus"))
     if status in ("PENDING", "RUNNING"):
         raise HTTPException(status_code=409, detail="O Face Swap ainda está em processamento.")
     if status == "FAILED":

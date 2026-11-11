@@ -1,4 +1,4 @@
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes } from "firebase/storage";
 import storage from "../firebase/storage";
 import auth from "../firebase/auth";
 
@@ -18,5 +18,7 @@ export async function uploadScopedFile(file: File, folder: UploadFolder, expecte
     const suffix = extension && /^[a-zA-Z0-9]{1,10}$/.test(extension) ? `.${extension}` : "";
     const object = ref(storage, `${folder}/${user.uid}/${crypto.randomUUID()}${suffix}`);
     await uploadBytes(object, file);
-    return getDownloadURL(object);
+    // Stable object address only; the backend authorizes and signs the object.
+    // This does not revoke or prove the absence of download tokens in metadata.
+    return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(object.bucket)}/o/${encodeURIComponent(object.fullPath)}`;
 }

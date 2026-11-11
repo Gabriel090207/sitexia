@@ -256,17 +256,7 @@
 
 }
 
-.library-item-video{
 
-    width:100%;
-    height:100%;
-
-    display:block;
-
-    object-fit:cover;
-
-    background:#000;
-}
 
 /* INFORMATION */
 
@@ -454,14 +444,7 @@
    VIDEO PLAYER
 ===================================== */
 
-.library-video-player {
-    position: relative;
 
-    width: 100%;
-    height: 100%;
-
-    overflow: hidden;
-}
 
 .library-video-controls {
     position: absolute;
@@ -741,4 +724,18 @@
     outline: 2px solid var(--primary);
 
     outline-offset: 3px;
+}
+.library-private-image {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.library-private-image > span {
+    padding: 16px;
+    text-align: center;
+    font-size: 14px;
+    color: #b9b9b9;
 }

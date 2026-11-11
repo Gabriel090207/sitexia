@@ -54,6 +54,7 @@ class ImageToVideoTests(unittest.IsolatedAsyncioTestCase):
         self.attach = Mock()
         self.charge = Mock()
         for name, mock in (
+            ("prepare_video_reference", Mock(return_value="signed-reference")),
             ("reserve_generation_credits", self.reserve),
             ("release_reserved_generation", self.release),
             ("attach_generation_task", self.attach),
@@ -141,10 +142,10 @@ class ImageToVideoTests(unittest.IsolatedAsyncioTestCase):
         output = io.StringIO()
         with patch.object(provider, "_sign", return_value=({}, "signed-body")), \
              patch.object(provider.httpx, "AsyncClient") as factory, \
-             contextlib.redirect_stdout(output):
+             self.assertLogs(provider.logger, level="INFO") as captured:
             factory.return_value.__aenter__.return_value = client
             await provider.create_image_to_video_task("https://image.invalid/?token=media-secret", "private-prompt", 5)
-        logs = output.getvalue()
+        logs = "\n".join(captured.output)
         self.assertIn("200", logs)
         for secret in ("media-secret", "private-prompt", "response-secret", "signed-body"):
             self.assertNotIn(secret, logs)

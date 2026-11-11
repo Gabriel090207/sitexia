@@ -9,6 +9,7 @@ from app.routes.swap import router as swap_router
 from app.routes.video_generation import router as video_generation_router
 from app.routes.image_generation import router as image_generation_router
 from app.routes.download import router as download_router
+from app.routes.media import router as media_router
 from app.routes.auth import router as auth_router
 from app.routes.topups import router as topups_router
 from app.routes.mercado_pago_webhook import router as mercado_pago_webhook_router
@@ -53,6 +54,8 @@ app.include_router(video_generation_router)
 app.include_router(image_generation_router)
 
 app.include_router(download_router)
+
+app.include_router(media_router)
 
 app.include_router(auth_router)
 

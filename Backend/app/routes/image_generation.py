@@ -120,10 +120,10 @@ async def create_reserved_image(user_id, quantity, prompt, model, size):
         if 400 <= error.response.status_code < 500 and error.response.status_code != 408:
             release_reserved_generation(generation_id)
         else:
-            logger.exception("Criação ambígua; reserva mantida: generationId=%s", generation_id)
+            logger.warning("Criação ambígua; reserva mantida: generationId=%s", generation_id)
         raise
     except (httpx.RequestError, json.JSONDecodeError, asyncio.CancelledError):
-        logger.exception("Criação ambígua; reserva mantida: generationId=%s", generation_id)
+        logger.warning("Criação ambígua; reserva mantida: generationId=%s", generation_id)
         raise
     except (ValueError, HTTPException):
         # Validações locais definitivas dos helpers.
@@ -131,7 +131,7 @@ async def create_reserved_image(user_id, quantity, prompt, model, size):
         raise
     except Exception:
         # Não há evidência suficiente para liberar em falhas inesperadas.
-        logger.exception("Criação não confirmada; reserva mantida: generationId=%s", generation_id)
+        logger.warning("Criação não confirmada; reserva mantida: generationId=%s", generation_id)
         raise
 
     task_id = task.get("taskId") if isinstance(task, dict) else None
@@ -149,15 +149,15 @@ async def create_reserved_image(user_id, quantity, prompt, model, size):
             attach_generation_task(generation_id, str(task_id))
         except (Aborted, DeadlineExceeded, ServiceUnavailable):
             logger.warning(
-                "Repetindo vínculo após falha transitória: generationId=%s taskId=%s",
-                generation_id, task_id,
+                "Repetindo vínculo após falha transitória: generationId=%s",
+                generation_id,
             )
             attach_generation_task(generation_id, str(task_id))
     except Exception:
         # A task já existe: falhar ao persistir o vínculo não autoriza liberação.
-        logger.exception(
-            "Falha ao vincular task; reserva mantida: generationId=%s taskId=%s",
-            generation_id, task_id,
+        logger.warning(
+            "Falha ao vincular task; reserva mantida: generationId=%s",
+            generation_id,
         )
         raise
     return task

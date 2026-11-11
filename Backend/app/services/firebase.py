@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from firebase_admin import credentials
 from firebase_admin import storage
 from firebase_admin import firestore
+from app.services.firestore_transactions import isolated_transactional
 
 
 load_dotenv()
@@ -49,7 +50,7 @@ if not firebase_admin._apps:
 bucket = storage.bucket()
 db = firestore.client()
 
-@firestore.transactional
+@isolated_transactional
 def deduct_credits(
     transaction,
     user_ref,

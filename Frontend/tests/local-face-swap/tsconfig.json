@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.app.json",
+  "compilerOptions": { "tsBuildInfoFile": "/private/tmp/xiaswap-local-face-swap.tsbuildinfo" },
+  "include": ["main.tsx", "firebase.ts", "uploads.ts", "actual-upload.d.ts"]
+}

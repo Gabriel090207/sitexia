@@ -18,7 +18,8 @@ export async function createSwapTask(
     sourceFaceId: string,
     targetFaceUrl: string,
     mediaType: "image" | "gif" | "video",
-    videoDuration: number | null
+    videoDuration: number | null,
+    idempotencyKey: string
 ) {
     const { data } = await api.post(
         "/swap/task",
@@ -28,7 +29,8 @@ export async function createSwapTask(
             target_face_url: targetFaceUrl,
             media_type: mediaType,
             video_duration: videoDuration
-        }
+        },
+        { headers: { "Idempotency-Key": idempotencyKey } }
     );
 
     return data;

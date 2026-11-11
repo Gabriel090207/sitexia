@@ -8,6 +8,7 @@ import httpx
 from google.api_core.exceptions import Aborted, DeadlineExceeded, ServiceUnavailable
 
 from fastapi import APIRouter, Depends, HTTPException
+from starlette.concurrency import run_in_threadpool
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,6 +17,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from app.dependencies.auth import AuthenticatedUser, get_current_user
 
 from app.services.firebase import db
+from app.services.video_reference import prepare_video_reference
 from app.services.generation_credits import (
     reserve_generation_credits,
     attach_generation_task,
@@ -85,10 +87,10 @@ async def create_reserved_video(user_id, mode, duration, create_task, *task_args
                     detail="O provedor não aceitou a solicitação de geração de vídeo.",
                 ) from None
         else:
-            logger.exception("Criação ambígua; reserva mantida: generationId=%s", generation_id)
+            logger.warning("Criação ambígua; reserva mantida: generationId=%s", generation_id)
         raise
     except (httpx.RequestError, json.JSONDecodeError, asyncio.CancelledError):
-        logger.exception("Criação ambígua; reserva mantida: generationId=%s", generation_id)
+        logger.warning("Criação ambígua; reserva mantida: generationId=%s", generation_id)
         raise
     except (ValueError, HTTPException):
         # Validações locais dos helpers (por exemplo, conversão de sourceTaskId).
@@ -96,7 +98,7 @@ async def create_reserved_video(user_id, mode, duration, create_task, *task_args
         raise
     except Exception:
         # Não há evidência suficiente para liberar em falhas inesperadas.
-        logger.exception("Criação não confirmada; reserva mantida: generationId=%s", generation_id)
+        logger.warning("Criação não confirmada; reserva mantida: generationId=%s", generation_id)
         raise
 
     task_id = task.get("taskId") if isinstance(task, dict) else None
@@ -120,12 +122,23 @@ async def create_reserved_video(user_id, mode, duration, create_task, *task_args
             attach_generation_task(generation_id, str(task_id))
     except Exception:
         # A task já existe: falhar ao persistir o vínculo não autoriza liberação.
-        logger.exception(
+        logger.warning(
             "Falha ao vincular task; reserva mantida: generationId=%s taskId=%s",
             generation_id, task_id,
         )
         raise
     return task
+
+async def create_private_reference_video(*args):
+    """Keep provider exception text (which may contain URLs) out of server logs."""
+    try:
+        return await create_reserved_video(*args)
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.warning("Falha na geração de vídeo: errorType=%s", type(error).__name__)
+        raise HTTPException(502, "Não foi possível confirmar a geração de vídeo.") from None
+
 
 router = APIRouter(
     prefix="/video-generation",
@@ -161,7 +174,7 @@ class TextToVideoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prompt: str
-    reference_image_url: str
+    reference_image_url: str = ""
     duration: int
 
 
@@ -175,12 +188,14 @@ async def create_image_to_video(
     ],
 ):
 
-    return await create_reserved_video(
+    reference = await run_in_threadpool(prepare_video_reference, current_user.uid, request.image_url, bounded_dimensions=True)
+
+    return await create_private_reference_video(
         current_user.uid,
         "image-to-video",
         request.duration,
         create_image_to_video_task,
-        request.image_url,
+        reference,
         request.prompt,
         request.duration
     )
@@ -207,7 +222,10 @@ async def get_video_generation_task(
     elif generation.get("type") != "video-generation":
         raise HTTPException(status_code=404, detail="Geração não encontrada.")
 
-    task = await get_video_task(task_id)
+    try:
+        task = await get_video_task(task_id)
+    except (httpx.HTTPError, json.JSONDecodeError):
+        raise HTTPException(502, "Não foi possível consultar a geração de vídeo.") from None
     if generation is not None:
         status = task.get("taskStatus") if isinstance(task, dict) else None
         if status == "SUCCEEDED":
@@ -248,12 +266,14 @@ async def create_reference_to_video(
     ],
 ):
 
-    return await create_reserved_video(
+    reference = await run_in_threadpool(prepare_video_reference, current_user.uid, request.reference_url, bounded_dimensions=True)
+
+    return await create_private_reference_video(
         current_user.uid,
         "reference-to-video",
         request.duration,
         create_reference_to_video_task,
-        request.reference_url,
+        reference,
         request.prompt,
         request.duration
     )
@@ -268,12 +288,14 @@ async def create_text_to_video(
     ],
 ):
 
-    return await create_reserved_video(
+    reference = await run_in_threadpool(prepare_video_reference, current_user.uid, request.reference_image_url, bounded_dimensions=False) if request.reference_image_url else ""
+
+    return await create_private_reference_video(
         current_user.uid,
         "text-to-video",
         request.duration,
         create_text_to_video_task,
         request.prompt,
-        request.reference_image_url,
+        reference,
         request.duration
     )

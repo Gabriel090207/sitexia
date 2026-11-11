@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from uuid import uuid4
 
 from firebase_admin import firestore
+from app.services.firestore_transactions import isolated_transactional
 
 from app.services.firebase import db
 
@@ -59,7 +60,7 @@ def _validate_finalization(operation, uid, generation_id):
     return task_id
 
 
-@firestore.transactional
+@isolated_transactional
 def _finalize_confirmed_task(transaction, uid, generation_id, observed_task_id, provider_status):
     reference = db.collection("generations").document(generation_id)
     snapshot = reference.get(transaction=transaction)
@@ -200,7 +201,7 @@ def _validate_user_reserve(user, cost):
         raise FaceSwapSubmissionUnavailable("Reserva financeira inválida.") from None
 
 
-@firestore.transactional
+@isolated_transactional
 def _acquire_submission(transaction, uid, generation_id, attempt_id):
     reference = db.collection("generations").document(generation_id)
     snapshot = reference.get(transaction=transaction)
@@ -237,7 +238,57 @@ def acquire_face_swap_submission(uid: str, generation_id: str) -> dict:
     return _acquire_submission(db.transaction(), uid, generation_id, uuid4().hex)
 
 
-@firestore.transactional
+@isolated_transactional
+def _cancel_before_submission(transaction, uid, generation_id):
+    reference = db.collection("generations").document(generation_id)
+    snapshot = reference.get(transaction=transaction)
+    if not snapshot.exists:
+        raise FaceSwapOperationNotFound("Operação não encontrada.")
+    operation = snapshot.to_dict()
+    if not isinstance(operation, dict) or operation.get("userId") != uid:
+        raise FaceSwapOperationNotFound("Operação não encontrada.")
+
+    # Only our own completed cancellation is a no-op retry. A provider failure,
+    # legacy release or charged operation must never be reclassified here.
+    cancelled = (
+        operation.get("creditStatus") == "released"
+        and operation.get("status") == "FAILED"
+        and operation.get("cancellationReason") == "before_submission"
+        and operation.get("cancelledAt") is not None
+    )
+    candidate = {**operation, "creditStatus": "reserved", "status": "CREATED"} if cancelled else operation
+    cost = _valid_reserved_operation(candidate, uid, generation_id)
+    if "taskLinkedAt" in operation:
+        raise FaceSwapSubmissionUnavailable("Operação indisponível para cancelamento.")
+    if cancelled:
+        return operation
+
+    user_snapshot = db.collection("users").document(uid).get(transaction=transaction)
+    _validate_user_reserve(user_snapshot.to_dict() if user_snapshot.exists else None, cost)
+    # Same operation document is read by acquisition: only one transition can
+    # commit. Reuse the shared financial primitive; no second balance model.
+    result = finalize_generation_in_transaction(transaction, generation_id, False)
+    audit = {"cancellationReason": "before_submission", "cancelledAt": firestore.SERVER_TIMESTAMP}
+    transaction.update(reference, audit)
+    return {**result, **audit}
+
+
+def cancel_face_swap_operation(uid: str, generation_id: str) -> dict:
+    """Cancel only CREATED/reserved operations with no acquired send grant.
+
+    Idempotent after this cancellation commits, including a lost commit reply.
+    SUBMITTING is never released: the current contract supplies no verifiable
+    evidence of definitive creation refusal. Timeouts, age, malformed responses
+    and client claims cannot authorize release. Not connected to active routes.
+    """
+    if not isinstance(uid, str) or not uid.strip() or "/" in uid:
+        raise FaceSwapOperationNotFound("Operação não encontrada.")
+    if not isinstance(generation_id, str) or not re.fullmatch(r"[0-9a-f]{64}", generation_id):
+        raise FaceSwapOperationNotFound("Operação não encontrada.")
+    return _cancel_before_submission(db.transaction(), uid, generation_id)
+
+
+@isolated_transactional
 def _link_task(transaction, uid, generation_id, attempt_id, task_id):
     reference = db.collection("generations").document(generation_id)
     snapshot = reference.get(transaction=transaction)

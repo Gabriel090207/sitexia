@@ -1,8 +1,11 @@
 import "./Library.css";
+import PrivateLibraryImage from "./PrivateLibraryImage";
+import PrivateLibraryVideo from "./PrivateLibraryVideo";
+import api from "../../api/api";
+import auth from "../../firebase/auth";
 
 import {
     useEffect,
-    useRef,
     useState,
 } from "react";
 
@@ -10,6 +13,7 @@ import { useAuth } from "../../contexts/AuthContext";
 
 import {
     subscribeToLibrary,
+    isLibraryVideo,
     type LibraryItem,
 } from "../../services/library";
 
@@ -19,135 +23,8 @@ import {
     Image as ImageIcon,
     Video,
     Download,
-    Play,
-    Pause,
     LoaderCircle,
 } from "lucide-react";
-
-function LibraryVideoPlayer({
-    src,
-}: {
-    src: string;
-}) {
-
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-
-    const [isPlaying, setIsPlaying] = useState(false);
-
-    const [currentTime, setCurrentTime] = useState(0);
-
-    const [duration, setDuration] = useState(0);
-
-    function togglePlay() {
-
-        const video = videoRef.current;
-
-        if (!video) {
-            return;
-        }
-
-       if (video.paused) {
-
-            void video.play().catch(() => {
-                setIsPlaying(false);
-            });
-
-        } else {
-
-            video.pause();
-
-        }
-
-    }
-
-    return (
-
-        <div className="library-video-player">
-
-            <video
-                ref={videoRef}
-                src={src}
-                className="library-item-video"
-                preload="metadata"
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onTimeUpdate={(event) =>
-                    setCurrentTime(event.currentTarget.currentTime)
-                }
-                onLoadedMetadata={(event) => {
-
-                    const videoDuration =
-                        event.currentTarget.duration;
-
-                    setDuration(
-                        Number.isFinite(videoDuration)
-                            ? videoDuration
-                            : 0
-                    );
-
-                }}
-                onEnded={(event) => {
-
-                    event.currentTarget.currentTime = 0;
-
-                    setCurrentTime(0);
-                    setIsPlaying(false);
-
-                }}
-            />
-
-            <div className="library-video-controls">
-
-                <button
-                    type="button"
-                    className="library-video-play"
-                    onClick={togglePlay}
-                    aria-label={
-                        isPlaying
-                            ? "Pausar vídeo"
-                            : "Reproduzir vídeo"
-                    }
-                >
-
-                    {isPlaying
-                        ? <Pause size={18} />
-                        : <Play size={18} />
-                    }
-
-                </button>
-
-                <input
-                    type="range"
-                    className="library-video-progress"
-                    min="0"
-                    max={duration || 0}
-                    step="0.1"
-                    value={currentTime}
-                    onChange={(event) => {
-
-                        const video = videoRef.current;
-
-                        if (!video) {
-                            return;
-                        }
-
-                        const newTime =
-                            Number(event.target.value);
-
-                        video.currentTime = newTime;
-
-                        setCurrentTime(newTime);
-
-                    }}
-                />
-
-            </div>
-
-        </div>
-
-    );
-
-}
 
 export default function Library() {
 
@@ -155,6 +32,8 @@ const { user } = useAuth();
 
 const [items, setItems] =
     useState<LibraryItem[]>([]);
+
+const [downloadError, setDownloadError] = useState("");
 
 const [downloadingId, setDownloadingId] =
     useState<string | null>(null);
@@ -170,29 +49,46 @@ const [activeFilter, setActiveFilter] =
 
 async function handleDownload(item: LibraryItem) {
 
-    if (!user || downloadingId) {
+    const session = auth.currentUser;
+    if (!user || downloadingId || !session || session.uid !== user.uid) {
         return;
     }
 
     try {
 
         setDownloadingId(item.id);
+        setDownloadError("");
 
-        const apiUrl = import.meta.env.VITE_API_URL;
+        const response = await api.get<Blob>(
+            `/download/${encodeURIComponent(user.uid)}/${encodeURIComponent(item.id)}`,
+            { responseType: "blob", params: { delivery: "direct" } }
+        );
 
-        const downloadUrl =
-            `${apiUrl}/download/${user.uid}/${item.id}`;
-
-        const response = await fetch(downloadUrl);
-
-        if (!response.ok) {
-            throw new Error("Não foi possível baixar o arquivo.");
+        if (auth.currentUser !== session) return;
+        const blob = response.data;
+        if ((response.headers["content-type"] as string | undefined)?.startsWith("application/json")) {
+            const access = JSON.parse(await blob.text());
+            const url = new URL(access.url);
+            if (url.protocol !== "https:" || url.username || url.password || url.hash
+                || !(url.hostname === "storage.googleapis.com" || url.hostname.endsWith(".storage.googleapis.com"))
+                || url.port || url.searchParams.has("token") || !url.searchParams.get("X-Goog-Signature")
+                || access.mediaType !== "video" || typeof access.contentType !== "string" || !access.contentType.startsWith("video/")
+                || typeof access.filename !== "string" || !/^xia-(face-swap|video-generation)-[0-9-]+\.[a-z0-9]+$/.test(access.filename)
+                || !Number.isFinite(Date.parse(access.expiresAt)) || Date.parse(access.expiresAt) <= Date.now()) {
+                throw new Error("Acesso de download inválido.");
+            }
+            if (auth.currentUser !== session) return;
+            const link = document.createElement("a");
+            link.href = url.href;
+            link.download = access.filename;
+            link.rel = "noreferrer noopener";
+            link.referrerPolicy = "no-referrer";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            return;
         }
-
-        const blob = await response.blob();
-
-        const contentDisposition =
-            response.headers.get("Content-Disposition");
+        const contentDisposition = response.headers["content-disposition"] as string | undefined;
 
         let filename =
             item.type === "video-generation"
@@ -233,7 +129,7 @@ async function handleDownload(item: LibraryItem) {
 
     } catch {
 
-        // O feedback visual será tratado pelo sistema de toast.
+        setDownloadError("Não foi possível iniciar o download. Verifique sua sessão e tente novamente.");
 
     } finally {
 
@@ -249,6 +145,7 @@ const filteredItems = items.filter((item) => {
         return true;
     }
 
+    if (activeFilter === "video-generation") return isLibraryVideo(item);
     return item.type === activeFilter;
 
 });
@@ -372,6 +269,7 @@ useEffect(() => {
                 </section>
 
 
+                {downloadError && <p role="alert">{downloadError}</p>}
                 <section className="library-content">
 
                     {filteredItems.length > 0 ? (
@@ -387,12 +285,14 @@ useEffect(() => {
 
                                     <div className="library-item-preview">
 
-                                        {item.type === "video-generation" ? (
+                                        {isLibraryVideo(item) ? (
 
                                             item.videoUrl ? (
 
-                                                <LibraryVideoPlayer
-                                                    src={item.videoUrl}
+                                                <PrivateLibraryVideo
+                                                    key={`${user?.uid ?? ""}:${item.id}`}
+                                                    itemId={item.id}
+                                                    uid={user?.uid ?? ""}
                                                 />
 
                                             ) : null
@@ -401,14 +301,10 @@ useEffect(() => {
 
                                             item.imageUrl ? (
 
-                                                <img
-                                                    src={item.imageUrl}
-                                                    alt={
-                                                        item.type === "face-swap"
-                                                            ? "Face Swap gerado"
-                                                            : "Imagem gerada"
-                                                    }
-                                                    className="library-item-image"
+                                                <PrivateLibraryImage
+                                                    value={item.imageUrl}
+                                                    uid={user?.uid ?? ""}
+                                                    alt={item.type === "face-swap" ? "Face Swap gerado" : "Imagem gerada"}
                                                 />
 
                                             ) : null
@@ -433,7 +329,7 @@ useEffect(() => {
 
                                             <span>
 
-                                                {item.type === "video-generation"
+                                                {isLibraryVideo(item)
                                                     ? "Vídeo gerado"
                                                     : "Imagem gerada"}
 
@@ -448,7 +344,7 @@ useEffect(() => {
                                             disabled={
                                                 downloadingId === item.id ||
                                                 (
-                                                    item.type === "video-generation"
+                                                    isLibraryVideo(item)
                                                         ? !item.videoUrl
                                                         : !item.imageUrl
                                                 )
@@ -456,7 +352,7 @@ useEffect(() => {
                                             aria-label={
                                                 downloadingId === item.id
                                                     ? "Baixando arquivo"
-                                                    : item.type === "video-generation"
+                                                    : isLibraryVideo(item)
                                                         ? "Baixar vídeo"
                                                         : "Baixar imagem"
                                             }

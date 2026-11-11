@@ -10,6 +10,7 @@ import math
 from copy import deepcopy
 
 from firebase_admin import firestore
+from app.services.firestore_transactions import isolated_transactional
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 from app.services.firebase import db
@@ -77,7 +78,7 @@ def _generation(transaction, generation_id):
     return ref, snapshot.to_dict()
 
 
-@firestore.transactional
+@isolated_transactional
 def _reserve(transaction, generation_id, user_id, cost, generation_type, mode, reservation_intent=None):
     generation_ref = db.collection(GENERATIONS_COLLECTION).document(generation_id)
     user_ref = db.collection("users").document(user_id)
@@ -151,7 +152,7 @@ def reserve_generation_credits(
     )
 
 
-@firestore.transactional
+@isolated_transactional
 def _attach(transaction, generation_id, task_id):
     ref, generation = _generation(transaction, generation_id)
     existing_task = generation.get("taskId")
@@ -200,7 +201,7 @@ def finalize_generation_in_transaction(transaction, generation_id, charge):
     return {**generation, **updates}
 
 
-@firestore.transactional
+@isolated_transactional
 def _finalize(transaction, generation_id, charge):
     return finalize_generation_in_transaction(transaction, generation_id, charge)
 

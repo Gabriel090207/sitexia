@@ -1210,3 +1210,17 @@
         font-size: 12px;
     }
 }
+
+.image-generation-private-result {
+    width: 100%;
+    min-height: 240px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-generation-private-result > p {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-secondary, #b9b9b9);
+}

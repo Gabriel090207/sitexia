@@ -28,6 +28,8 @@ firebase_stub = types.ModuleType("app.services.firebase")
 firebase_stub.db = client
 sys.modules["app.services.firebase"] = firebase_stub
 from app.services import face_swap_operations as ops
+from app.services import face_swap_reconciliation as reconciliation
+from app.services import generation_credits as credits
 
 
 class EmulatorFinanceTests(unittest.TestCase):
@@ -214,6 +216,99 @@ class EmulatorFinanceTests(unittest.TestCase):
         owner = client.collection("face_swap_tasks").document(task_id).get().to_dict()
         self.assertEqual(owner["generationId"], next(r for r in results if r)["generationId"])
         self.balances(5, 4)
+
+    def test_cancel_repeated_and_terminal_is_irreversible(self):
+        record = self.reserve()
+        ops.cancel_face_swap_operation(self.uid, record["generationId"])
+        reference = client.collection("generations").document(record["generationId"])
+        persisted = reference.get().to_dict()
+        self.assertEqual(ops.cancel_face_swap_operation(self.uid, record["generationId"]), persisted)
+        self.assertEqual(reference.get().to_dict(), persisted)
+        with self.assertRaises(ops.FaceSwapSubmissionUnavailable):
+            ops.acquire_face_swap_submission(self.uid, record["generationId"])
+        credits.charge_reserved_generation(record["generationId"])
+        self.assertEqual(reference.get().to_dict(), persisted)
+        self.balances(5, 0)
+
+    def test_concurrent_cancellations_release_once(self):
+        record = self.reserve()
+        self.parallel(lambda _: ops.cancel_face_swap_operation(self.uid, record["generationId"]))
+        self.balances(5, 0)
+
+    def test_cancel_races_acquisition(self):
+        record = self.reserve()
+        def attempt(index):
+            try:
+                action = ops.cancel_face_swap_operation if index == 0 else ops.acquire_face_swap_submission
+                action(self.uid, record["generationId"])
+                return index
+            except ops.FaceSwapSubmissionUnavailable:
+                return None
+        results = self.parallel(attempt)
+        self.assertEqual(sum(result is not None for result in results), 1)
+        self.balances(5, 0 if 0 in results else 2)
+
+    def test_cancel_cannot_release_linked_or_charged(self):
+        record, _, task_id = self.linked()
+        for status in (None, "SUCCEEDED"):
+            if status:
+                ops._finalize_confirmed_task(client.transaction(), self.uid, record["generationId"], task_id, status)
+            with self.assertRaises(ops.FaceSwapSubmissionUnavailable):
+                ops.cancel_face_swap_operation(self.uid, record["generationId"])
+        self.balances(3, 0)
+
+    def test_other_reservation_concurrent_with_cancel(self):
+        record = self.reserve()
+        self.parallel(lambda index: ops.cancel_face_swap_operation(self.uid, record["generationId"])
+                      if index == 0 else self.reserve("other"))
+        self.balances(5, 2)
+
+    def test_image_reserve_survives_concurrent_face_finalization(self):
+        image = credits.reserve_generation_credits(self.uid, "image", 0.2, "image-generation", "text-to-image")
+        image_ref = client.collection("generations").document(image["generationId"])
+        before = image_ref.get().to_dict()
+        record, _, task_id = self.linked()
+        with patch.object(ops, "_fetch_face_swap_task", AsyncMock(return_value={"taskId": task_id, "taskStatus": "SUCCEEDED"})):
+            self.parallel(lambda _: self.finalize(record, "SUCCEEDED"))
+        self.assertEqual(image_ref.get().to_dict(), before)
+        self.assertEqual(self.user.get().to_dict()["credits"], 3)
+        self.assertAlmostEqual(self.user.get().to_dict()["reservedCredits"], 0.2)
+
+    def test_reconciliation_pagination_and_safe_new_round(self):
+        self.user.update({"credits": 20})
+        records = [self.linked("page-" + str(i)) for i in range(5)]
+        unlinked = self.reserve("unlinked")
+        ops.acquire_face_swap_submission(self.uid, unlinked["generationId"])
+        expected = {record[0]["generationId"] for record in records} | {unlinked["generationId"]}
+        first = reconciliation.list_reserved_face_swap_operations(limit=4)
+        last = reconciliation.list_reserved_face_swap_operations(limit=4, after_id=first[-1].id)
+        self.assertEqual([len(first), len(last)], [4, 2])
+        self.assertEqual({doc.id for doc in first + last}, expected)
+        self.assertEqual(reconciliation.list_reserved_face_swap_operations(limit=4, after_id=last[-1].id), [])
+        statuses = {task_id: ("SUCCEEDED" if i < 2 else "FAILED" if i < 4 else "UNKNOWN")
+                    for i, (_, _, task_id) in enumerate(records)}
+        async def fetch(task_id):
+            return {"taskId": task_id, "taskStatus": statuses[task_id]}
+        def round_trip():
+            cursor, seen, lengths = None, [], []
+            for _ in range(5):
+                page = asyncio.run(reconciliation.reconcile_face_swap_reservations(limit=2, after_id=cursor))
+                lengths.append(len(page["results"]))
+                seen.extend(item["generationId"] for item in page["results"])
+                cursor = page["next_cursor"]
+                if cursor is None:
+                    return seen, lengths
+            self.fail("Pagination did not terminate")
+        with patch.object(ops, "_fetch_face_swap_task", side_effect=fetch):
+            seen, lengths = round_trip()
+            self.assertEqual(set(seen), expected)
+            self.assertEqual(len(seen), len(expected))
+            self.assertEqual(lengths, [2, 2, 2, 0])
+            self.balances(16, 4)
+            again, lengths = round_trip()
+            self.assertEqual(set(again), {records[4][0]["generationId"], unlinked["generationId"]})
+            self.assertEqual(lengths, [2, 0])
+            self.balances(16, 4)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import PrivateLibraryVideo from "../Library/PrivateLibraryVideo";
 import { formatCredits } from "../../utils/formatCredits";
 import {
     useEffect,
@@ -10,6 +11,11 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
     doc,
     onSnapshot,
+    collection,
+    getDocs,
+    query,
+    where,
+    limit,
 } from "firebase/firestore";
 
 import db from "../../firebase/firestore";
@@ -116,8 +122,17 @@ const [isGenerating, setIsGenerating] =
 const [generationStatus, setGenerationStatus] =
     useState("");
 
-const [generatedVideoUrl, setGeneratedVideoUrl] =
-    useState("");
+type SavedVideo = { owner: NonNullable<typeof user>; reference: string; taskId: string; itemId?: string };
+const [generatedVideo, setGeneratedVideo] = useState<SavedVideo | null>(null);
+const activeVideo = generatedVideo?.owner === user && auth.currentUser === user ? generatedVideo : null;
+const pageMounted = useRef(false);
+const generationInFlight = useRef(false);
+const registrationInFlight = useRef(false);
+const [isRegistering, setIsRegistering] = useState(false);
+useEffect(() => {
+    pageMounted.current = true;
+    return () => { pageMounted.current = false; };
+}, []);
 
 const [error, setError] =
     useState("");
@@ -128,12 +143,23 @@ const [libraryVideos, setLibraryVideos] =
 const [selectedSourceVideo, setSelectedSourceVideo] =
     useState<LibraryItem | null>(null);
 
+const [libraryOwner, setLibraryOwner] = useState<typeof user>(null);
+const [sourceOwner, setSourceOwner] = useState<typeof user>(null);
+const currentSourceVideo = sourceOwner === user && auth.currentUser === user ? selectedSourceVideo : null;
+const visibleLibraryVideos = libraryOwner === user && auth.currentUser === user ? libraryVideos : [];
+useEffect(() => {
+    setGeneratedVideo(null);
+    setSelectedSourceVideo(null);
+    setSourceOwner(null);
+    setIsVideoSelectorOpen(false);
+}, [user]);
+
 const [isVideoSelectorOpen, setIsVideoSelectorOpen] =
     useState(false);
 
 const hasRequiredMedia =
     activeMode === "video-extend"
-        ? !!selectedSourceVideo?.taskId
+        ? !!currentSourceVideo?.taskId
         : !!imageUrl;
 
 const hasEnoughCredits =
@@ -203,41 +229,15 @@ useEffect(() => {
 }, [user]);
 
 useEffect(() => {
-
-    if (!user) {
-
-        setLibraryVideos([]);
-
-        return;
-
-    }
-
-    const unsubscribe =
-        subscribeToLibrary(
-            user.uid,
-            (items) => {
-
-                const videos =
-                    items.filter((item) => {
-
-                        return (
-                            item.type === "video-generation" &&
-                            Boolean(item.videoUrl)
-                        );
-
-                    });
-
-                setLibraryVideos(videos);
-
-            }
-        );
-
-    return () => {
-
-        unsubscribe();
-
-    };
-
+    let active = true;
+    setLibraryVideos([]);
+    setLibraryOwner(user);
+    if (!user) return;
+    const unsubscribe = subscribeToLibrary(user.uid, items => {
+        if (!active || auth.currentUser !== user) return;
+        setLibraryVideos(items.filter(item => item.type === "video-generation" && Boolean(item.videoUrl)));
+    });
+    return () => { active = false; unsubscribe(); };
 }, [user]);
 
 
@@ -264,7 +264,7 @@ function handleModeChange(
     setPrompt("");
     setDuration(5);
     setError("");
-    setGeneratedVideoUrl("");
+    setGeneratedVideo(null);
     setGenerationStatus("");
 
     if (imageInputRef.current) {
@@ -291,7 +291,7 @@ async function handleImageChange(
     setImagePreview(previewUrl);
 
     setImageUrl("");
-    setGeneratedVideoUrl("");
+    setGeneratedVideo(null);
     setError("");
 
     try {
@@ -420,7 +420,43 @@ async function videoUrlToFile(
 
 }
 
+async function registerSavedVideo(saved: SavedVideo) {
+    if (registrationInFlight.current || !pageMounted.current || auth.currentUser !== saved.owner) return;
+    registrationInFlight.current = true;
+    setIsRegistering(true);
+    try {
+        // Confirm an existing record before retrying an ambiguous registration.
+        const snapshot = await getDocs(query(collection(db, "users", saved.owner.uid, "swaps"),
+            where("taskId", "==", saved.taskId), limit(5)));
+        if (!pageMounted.current || auth.currentUser !== saved.owner) return;
+        const existing = snapshot.docs.find(document => {
+            const data = document.data();
+            return data.type === "video-generation" && typeof data.videoUrl === "string" && data.videoUrl;
+        });
+        const itemId = saved.itemId ?? existing?.id
+            ?? await createLibraryVideo(saved.owner.uid, saved.reference, saved.taskId);
+        if (pageMounted.current && auth.currentUser === saved.owner) {
+            setGeneratedVideo({ ...saved, itemId, reference: existing?.data().videoUrl ?? saved.reference });
+            setError("");
+        }
+    } finally {
+        registrationInFlight.current = false;
+        if (pageMounted.current) setIsRegistering(false);
+    }
+}
+
+async function retryVideoRegistration() {
+    if (!activeVideo || activeVideo.itemId) return;
+    try { await registerSavedVideo(activeVideo); }
+    catch {
+        if (pageMounted.current && auth.currentUser === activeVideo.owner) {
+            setError("O vídeo continua salvo, mas não foi possível confirmar o registro na biblioteca. Nenhuma nova tarefa ou upload foi iniciado.");
+        }
+    }
+}
+
 async function handleGenerateVideo() {
+    if (generationInFlight.current || activeVideo) return;
 
     if (isUploading) {
 
@@ -473,7 +509,7 @@ async function handleGenerateVideo() {
 
     if (
         activeMode === "video-extend" &&
-        !selectedSourceVideo?.taskId
+        !currentSourceVideo?.taskId
     ) {
 
         setError(
@@ -504,10 +540,13 @@ async function handleGenerateVideo() {
 
     }
 
+    if (auth.currentUser !== user) return;
+    generationInFlight.current = true;
+    let savedResult: SavedVideo | null = null;
     try {
 
         setError("");
-        setGeneratedVideoUrl("");
+        setGeneratedVideo(null);
         setIsGenerating(true);
 
         setGenerationStatus(
@@ -521,7 +560,7 @@ async function handleGenerateVideo() {
         if (activeMode === "video-extend") {
 
             task = await createVideoExtend(
-                selectedSourceVideo!.taskId!,
+                currentSourceVideo!.taskId!,
                 prompt,
                 duration
             );
@@ -569,6 +608,7 @@ async function handleGenerateVideo() {
 
         
 
+        if (!pageMounted.current || auth.currentUser !== user) return;
         if (!result.videoUrl) {
 
             throw new Error(
@@ -586,6 +626,7 @@ async function handleGenerateVideo() {
                 result.videoUrl
             );
 
+        if (!pageMounted.current || auth.currentUser !== user) return;
         const firebaseVideoUrl =
             await uploadFile(
                 videoFile,
@@ -593,41 +634,23 @@ async function handleGenerateVideo() {
             );
 
       
-        await createLibraryVideo(
-            user.uid,
-            firebaseVideoUrl,
-            task.taskId
-        );
-
-
-        setGeneratedVideoUrl(
-            firebaseVideoUrl
-        );
-
-        setGenerationStatus("");
+        savedResult = { owner: user, reference: firebaseVideoUrl, taskId: String(task.taskId) };
+        if (!pageMounted.current || auth.currentUser !== user) return;
+        setGeneratedVideo(savedResult);
+        await registerSavedVideo(savedResult);
+        if (pageMounted.current && auth.currentUser === user) setGenerationStatus("");
 
     } catch (error) {
-
-        console.error(
-            "Erro ao gerar vídeo:",
-            error
-        );
-
-        setGenerationStatus("");
-
-        setError(
-            getGenerationErrorMessage(
-                error,
-                "Não foi possível gerar o vídeo. Tente novamente."
-            )
-        );
-
+        if (pageMounted.current && auth.currentUser === user) {
+            setGenerationStatus("");
+            setError(savedResult
+                ? "O vídeo foi concluído e salvo, mas não foi possível confirmar o registro na biblioteca. A referência foi preservada; tente confirmar o registro sem gerar novamente."
+                : getGenerationErrorMessage(error, "Não foi possível gerar o vídeo. Tente novamente."));
+        }
     } finally {
-
-        setIsGenerating(false);
-
+        generationInFlight.current = false;
+        if (pageMounted.current) setIsGenerating(false);
     }
-
 }
 
     return (
@@ -664,7 +687,7 @@ async function handleGenerateVideo() {
 
                    {/* MODES */}
 
-                    {!isGenerating && !generatedVideoUrl && (
+                    {!isGenerating && !activeVideo && (
 
                         <div className="video-generation-modes">
 
@@ -778,7 +801,7 @@ async function handleGenerateVideo() {
 
                             </div>
 
-                        ) : generatedVideoUrl ? (
+                        ) : activeVideo ? (
 
                             /* RESULT */
 
@@ -789,7 +812,7 @@ async function handleGenerateVideo() {
                                     className="video-generation-back-button"
                                     onClick={() => {
 
-                                        setGeneratedVideoUrl("");
+                                        setGeneratedVideo(null);
 
                                         setImageUrl("");
 
@@ -814,12 +837,19 @@ async function handleGenerateVideo() {
 
                                 </button>
 
-                                <video
-                                    src={generatedVideoUrl}
-                                    controls
-                                    playsInline
-                                    className="video-generation-generation-video"
-                                />
+                                {activeVideo.itemId ? (
+                                    <div className="video-generation-private-player">
+                                        <PrivateLibraryVideo key={`${activeVideo.owner.uid}:${activeVideo.itemId}`}
+                                            itemId={activeVideo.itemId} uid={activeVideo.owner.uid} />
+                                    </div>
+                                ) : (
+                                    <div role="status">
+                                        <p>Vídeo salvo. A reprodução privada depende da confirmação do registro na biblioteca.</p>
+                                        <button type="button" disabled={isRegistering} onClick={() => { void retryVideoRegistration(); }}>
+                                            {isRegistering ? "Confirmando registro…" : "Confirmar registro na biblioteca"}
+                                        </button>
+                                    </div>
+                                )}
 
                             </div>
 
@@ -836,16 +866,14 @@ async function handleGenerateVideo() {
 
                                    <div className="video-generation-upload">
 
-                                        {selectedSourceVideo?.videoUrl ? (
+                                        {currentSourceVideo?.videoUrl ? (
 
                                             <div className="video-generation-preview">
 
-                                                <video
-                                                    src={selectedSourceVideo.videoUrl}
-                                                    controls
-                                                    playsInline
-                                                    className="video-generation-preview-video"
-                                                />
+                                                <div className="video-generation-private-player">
+                                                    <PrivateLibraryVideo key={`${user?.uid ?? ""}:${currentSourceVideo.id}`}
+                                                        itemId={currentSourceVideo.id} uid={user?.uid ?? ""} />
+                                                </div>
 
                                                 <button
                                                     type="button"
@@ -1070,7 +1098,7 @@ async function handleGenerateVideo() {
                             GENERATE BUTTON
                         ========================= */}
 
-                        {!isGenerating && !generatedVideoUrl && (
+                        {!isGenerating && !activeVideo && (
 
                             <>
 
@@ -1163,11 +1191,11 @@ async function handleGenerateVideo() {
 
                                     </div>
 
-                                    {libraryVideos.length > 0 ? (
+                                    {visibleLibraryVideos.length > 0 ? (
 
                                         <div className="video-generation-selector-grid">
 
-                                            {libraryVideos.map((item) => (
+                                            {visibleLibraryVideos.map((item, index) => (
 
                                                 <button
                                                     key={item.id}
@@ -1187,7 +1215,9 @@ async function handleGenerateVideo() {
 
                                                         }
 
+                                                        if (!user || auth.currentUser !== user) return;
                                                         setSelectedSourceVideo(item);
+                                                        setSourceOwner(user);
 
                                                         setIsVideoSelectorOpen(false);
 
@@ -1196,12 +1226,8 @@ async function handleGenerateVideo() {
                                                     }}
                                                 >
 
-                                                    <video
-                                                        src={item.videoUrl}
-                                                        muted
-                                                        playsInline
-                                                        preload="metadata"
-                                                    />
+                                                    <Video size={36} aria-hidden="true" />
+                                                    <span>Selecionar vídeo {index + 1}</span>
 
                                                 </button>
 

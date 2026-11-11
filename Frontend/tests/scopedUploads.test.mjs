@@ -15,9 +15,9 @@ function setup(uid = 'alice') {
     vm.runInNewContext(code, { module, exports: module.exports, crypto: webcrypto,
         require(path) {
             if (path === 'firebase/storage') return {
-                ref: (_storage, path) => ({ path }),
+                ref: (_storage, path) => ({ path, fullPath: path, bucket: "test-bucket" }),
                 uploadBytes: async (object, file) => { writes.push({ path: object.path, file }); },
-                getDownloadURL: async object => `https://mock.invalid/${object.path}?token=mock`,
+                getDownloadURL: () => { throw new Error("Temporary uploads must never obtain download tokens"); },
             };
             if (path === '../firebase/auth') return { __esModule: true, default: auth };
             if (path === '../firebase/storage') return { __esModule: true, default: {} };
@@ -27,7 +27,7 @@ function setup(uid = 'alice') {
     return { upload: module.exports.uploadScopedFile, auth, writes };
 }
 for (const folder of ['face-swap', 'face-swap-faces', 'video-generation']) {
-    test(`${folder}: authenticated UID, distinct crypto UUIDs, extension and download URL`, async () => {
+    test(`${folder}: authenticated UID, distinct crypto UUIDs, extension and token-free reference`, async () => {
         const { upload, writes } = setup();
         const file = { name: 'portrait.PNG', type: 'image/png' };
         const url = await upload(file, folder, 'alice');
@@ -36,7 +36,9 @@ for (const folder of ['face-swap', 'face-swap-faces', 'video-generation']) {
         assert.match(writes[0].path, new RegExp(`^${folder}/alice/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.PNG$`));
         assert.notEqual(writes[0].path, writes[1].path);
         assert.equal(writes[0].file, file);
-        assert.equal(url, `https://mock.invalid/${writes[0].path}?token=mock`);
+        assert.equal(url, `https://firebasestorage.googleapis.com/v0/b/test-bucket/o/${encodeURIComponent(writes[0].path)}`);
+        assert.equal(new URL(url).search, "");
+        assert.equal(new URL(url).hash, "");
     });
 }
 test('different users cannot select another UID', async () => {

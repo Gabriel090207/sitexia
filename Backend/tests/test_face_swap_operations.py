@@ -9,13 +9,13 @@ import test_face_swap_materials as helpers
 
 
 with patch.dict(helpers.sys.modules, {"app.services.firebase": helpers.firebase}), \
-     patch("firebase_admin.firestore.transactional", side_effect=lambda function: function):
+     patch("app.services.firestore_transactions.isolated_transactional", side_effect=lambda function: function):
     credits = helpers.load("tested_operation_credits", "app/services/generation_credits.py")
 with patch.dict(helpers.sys.modules, {
     "app.services.firebase": helpers.firebase,
     "app.services.face_swap_materials": helpers.ownership,
     "app.services.generation_credits": credits,
-}), patch("firebase_admin.firestore.transactional", side_effect=lambda function: function):
+}), patch("app.services.firestore_transactions.isolated_transactional", side_effect=lambda function: function):
     operations = helpers.load("tested_swap_operations", "app/services/face_swap_operations.py")
 
 

@@ -1,3 +1,9 @@
+import PrivateLibraryVideo from "../Library/PrivateLibraryVideo";
+import PrivateFaceSwapImage from "./PrivateFaceSwapImage";
+import { loadIntents, storeIntent, selectIntent, recoverSwapTask, swapOperationError } from "./faceSwapIntent";
+import type { SwapIntent } from "./faceSwapIntent";
+import { FaceSwapFlowError, requireResultUrl, waitForFaceSwap } from "./faceSwapPolling";
+import { getGenerationErrorMessage } from "../../utils/generationErrors";
 import { formatCredits } from "../../utils/formatCredits";
 import "./FaceSwap.css";
 import {
@@ -15,9 +21,7 @@ import db from "../../firebase/firestore";
 
 import { Link } from "react-router-dom";
 
-import {
-    uploadImageFromUrl,
-} from "../../services/storage";
+import { saveFaceSwapResult } from "./saveFaceSwapResult";
 import { uploadScopedFile } from "../../services/scopedUploads";
 
 import { useAuth } from "../../contexts/AuthContext";
@@ -40,6 +44,8 @@ import {
 
 import {
     createLibraryImage,
+    createLibraryVideo,
+    findFaceSwapVideo,
 } from "../../services/library";
 
 export default function FaceSwap() {
@@ -49,9 +55,29 @@ const [uploadAuthError, setUploadAuthError] = useState("");
 const canUpload = () => allowAuthenticatedUpload(user, authLoading, auth.currentUser, setUploadAuthError);
 
 const [credits, setCredits] = useState<number>(0);
+const intentsRef = useRef<{ uid: string; items: SwapIntent[] }>({ uid: "", items: [] });
+const [pendingIntents, setPendingIntents] = useState<SwapIntent[]>([]);
+const [sessionReady, setSessionReady] = useState(false);
 
 const [selectedFile, setSelectedFile] = useState<File | null>(null);
 const [fileUrl, setFileUrl] = useState("");
+const [filePreview, setFilePreview] = useState("");
+const [selectedFace, setSelectedFace] = useState<File | null>(null);
+const [facePreview, setFacePreview] = useState("");
+
+useEffect(() => {
+    if (!selectedFile) { setFilePreview(""); return; }
+    const preview = URL.createObjectURL(selectedFile);
+    setFilePreview(preview);
+    return () => URL.revokeObjectURL(preview);
+}, [selectedFile]);
+
+useEffect(() => {
+    if (!selectedFace) { setFacePreview(""); return; }
+    const preview = URL.createObjectURL(selectedFace);
+    setFacePreview(preview);
+    return () => URL.revokeObjectURL(preview);
+}, [selectedFace]);
 
 const [videoDuration, setVideoDuration] =
     useState<number>(0);
@@ -84,10 +110,22 @@ const [loadingFace, setLoadingFace] = useState(false);
 const [faceUrl, setFaceUrl] =
     useState("");
 
-const [resultUrl, setResultUrl] = useState("");
+const [privateResult, setPrivateResult] = useState<{
+    owner: NonNullable<typeof user>; taskId: string; kind: "image" | "video" | "unknown"; reference?: string; libraryItemId?: string;
+} | null>(null);
+const [privateImageUrl, setPrivateImageUrl] = useState("");
+const activeResult = privateResult?.owner === user && auth.currentUser === user ? privateResult : null;
+const pageMounted = useRef(false);
+useEffect(() => {
+    pageMounted.current = true;
+    return () => { pageMounted.current = false; };
+}, []);
 
 const fileInputRef = useRef<HTMLInputElement>(null);
 const faceInputRef = useRef<HTMLInputElement>(null);
+
+const generationInFlight = useRef(false);
+const [generationError, setGenerationError] = useState("");
 
 const [isGenerating, setIsGenerating] =
     useState(false);
@@ -97,6 +135,9 @@ const hasEnoughCredits =
 
 const canGenerate =
     !!user &&
+    sessionReady &&
+    !loadingFile &&
+    !loadingFace &&
     !!fileUrl &&
     !!faceUrl &&
     generationCost > 0 &&
@@ -123,6 +164,38 @@ const generateBlockedMessage =
                     : "";
 
 useEffect(() => {
+    setSessionReady(false);
+    setSelectedFile(null);
+    setSelectedFace(null);
+    setFileUrl("");
+    setFaceUrl("");
+    setPrivateResult(null);
+    setPrivateImageUrl("");
+    setGenerationError("");
+    setCredits(0);
+    intentsRef.current = { uid: user?.uid ?? "", items: [] };
+    setPendingIntents([]);
+    if (!user) return;
+    try {
+        const items = loadIntents(sessionStorage, user.uid);
+        intentsRef.current = { uid: user.uid, items };
+        setPendingIntents(items.filter(item => !item.saved));
+        setSessionReady(true);
+    } catch {
+        setGenerationError("Não foi possível ler as operações desta sessão. Novos envios foram bloqueados para evitar duplicidade.");
+    }
+}, [user?.uid]);
+
+function rememberIntent(intent: SwapIntent) {
+    if (!user || auth.currentUser?.uid !== user.uid || intentsRef.current.uid !== user.uid) {
+        throw new FaceSwapFlowError("A sessão mudou. Entre na conta original para recuperar a operação.");
+    }
+    const items = storeIntent(sessionStorage, user.uid, intentsRef.current.items, intent);
+    intentsRef.current = { uid: user.uid, items };
+    setPendingIntents(items.filter(item => !item.saved));
+}
+
+useEffect(() => {
 
     if (!user) {
         setCredits(0);
@@ -146,9 +219,10 @@ useEffect(() => {
 
             const data = snapshot.data();
 
-            setCredits(
-                Number(data.credits ?? 0)
-            );
+            const total = Number(data.credits ?? 0);
+            const reserved = Number(data.reservedCredits ?? 0);
+            setCredits(Number.isFinite(total) && Number.isFinite(reserved)
+                ? Math.max(0, total - Math.max(0, reserved)) : 0);
         }
     );
 
@@ -197,12 +271,83 @@ function getVideoDuration(
     });
 }
 
-async function sleep(
-    ms: number
-) {
-    return new Promise(
-        (resolve) => setTimeout(resolve, ms)
-    );
+async function handleGenerateSwap(recovery?: SwapIntent) {
+    if (generationInFlight.current) return;
+    if (!recovery && activeResult) {
+        const displayUrl = activeResult.kind === "image" ? privateImageUrl : "";
+        if (displayUrl) window.open(displayUrl, "_blank", "noopener,noreferrer");
+        return;
+    }
+    if (!user || auth.currentUser?.uid !== user.uid || !sessionReady || (!recovery && !canGenerate)) return;
+    generationInFlight.current = true;
+    setIsGenerating(true);
+    setGenerationError("");
+    let savingResult = false;
+    let savedReference: string | undefined;
+    try {
+        const intent = { ...(recovery ?? selectIntent(intentsRef.current.items, {
+            original: fileUrl, target: faceUrl,
+            mediaType: isVideo ? "video" : isGif ? "gif" : "image",
+            duration: isVideo ? videoDuration : null,
+        })) };
+        rememberIntent(intent);
+        const taskId = await recoverSwapTask(intent, recovery ? undefined : fileUrl, rememberIntent, {
+            createMaterial, getMaterial, createSwapTask,
+        });
+        const completed = await waitForFaceSwap(() => getSwapTask(taskId), "taskStatus", "o processamento do Face Swap");
+        const result = await getSwapResult(taskId);
+        const url = requireResultUrl(result?.file_url);
+        if (!pageMounted.current || auth.currentUser !== user) throw new FaceSwapFlowError("A sessão mudou. Recupere a operação na conta original.");
+        const kind = completed.videoUrl === url ? "video"
+            : Array.isArray(completed.imageUrls) && completed.imageUrls.includes(url) ? "image" : "unknown";
+        const previousResult = activeResult?.taskId === taskId ? activeResult : null;
+        const existingVideo = previousResult?.libraryItemId && previousResult.reference
+            ? { id: previousResult.libraryItemId, reference: previousResult.reference }
+            : kind !== "image" ? await findFaceSwapVideo(user.uid, taskId) : null;
+        if (!pageMounted.current || auth.currentUser !== user) return;
+        if (existingVideo) {
+            setPrivateImageUrl("");
+            setPrivateResult({ owner: user, taskId, kind: "video", reference: existingVideo.reference, libraryItemId: existingVideo.id });
+            if (!intent.saved) { intent.saved = true; rememberIntent(intent); }
+            return;
+        }
+        const previousReference = previousResult?.reference;
+        setPrivateImageUrl("");
+        setPrivateResult({ owner: user, taskId, kind, reference: previousReference });
+        if (!intent.saved) {
+            savingResult = true;
+            const saved = previousReference && activeResult && activeResult.kind !== "unknown" && (kind === "unknown" || kind === activeResult.kind)
+                ? { reference: previousReference, mediaType: activeResult.kind }
+                : await saveFaceSwapResult(url, user.uid, kind);
+            savedReference = saved.reference;
+            if (pageMounted.current && auth.currentUser === user) {
+                setPrivateResult({ owner: user, taskId, kind: saved.mediaType, reference: saved.reference });
+            }
+            if (saved.mediaType === "video") {
+                const libraryItemId = await createLibraryVideo(user.uid, saved.reference, taskId, "face-swap");
+                if (pageMounted.current && auth.currentUser === user) {
+                    setPrivateResult({ owner: user, taskId, kind: "video", reference: saved.reference, libraryItemId });
+                }
+            } else {
+                await createLibraryImage(user.uid, saved.reference, "face-swap");
+            }
+            intent.saved = true;
+            rememberIntent(intent);
+        }
+    } catch (error) {
+        if (pageMounted.current && auth.currentUser === user) setGenerationError(
+            savingResult
+                ? savedReference
+                    ? "O Face Swap foi concluído e salvo, mas não foi possível confirmar seu registro na biblioteca. A referência foi preservada; nenhuma nova tarefa foi criada."
+                    : "O Face Swap foi concluído, mas não foi possível salvar o resultado na biblioteca. Use a recuperação manual da operação; nenhuma nova tarefa foi criada automaticamente."
+                : error instanceof FaceSwapFlowError
+                    ? error.message
+                    : swapOperationError(error) ?? `${getGenerationErrorMessage(error, "Não foi possível confirmar o Face Swap.")} A operação foi preservada para recuperação manual; não houve reenvio automático.`,
+        );
+    } finally {
+        generationInFlight.current = false;
+        if (pageMounted.current) setIsGenerating(false);
+    }
 }
 
     return (
@@ -214,7 +359,7 @@ async function sleep(
                     <Coins size={20} />
 
                     <span>
-                        {formatCredits(credits)} {credits === 1 ? "crédito" : "créditos"}
+                        {formatCredits(credits)} {credits === 1 ? "crédito disponível" : "créditos disponíveis"}
                     </span>
                 </div>
 
@@ -259,7 +404,7 @@ async function sleep(
 
                                     </div>
 
-                                ) : resultUrl ? (
+                                ) : activeResult ? (
 
                                     <div className="face-swap-generation-result">
 
@@ -268,7 +413,9 @@ async function sleep(
                                             className="face-swap-back-button"
                                             onClick={() => {
 
-                                                setResultUrl("");
+                                                setPrivateResult(null);
+                                                setPrivateImageUrl("");
+                                                setGenerationError("");
 
                                                 setFileUrl("");
 
@@ -289,11 +436,24 @@ async function sleep(
 
                                         </button>
 
-                                        <img
-                                            src={resultUrl}
-                                            alt="Resultado"
-                                            className="face-swap-generation-image"
-                                        />
+                                        {activeResult.kind === "image" && activeResult.reference ? (
+                                            <PrivateFaceSwapImage value={activeResult.reference} uid={activeResult.owner.uid}
+                                                onUrlChange={setPrivateImageUrl} />
+                                        ) : activeResult.kind === "video" && activeResult.libraryItemId ? (
+                                            <div className="face-swap-private-video">
+                                                <PrivateLibraryVideo key={`${activeResult.owner.uid}:${activeResult.libraryItemId}`}
+                                                    itemId={activeResult.libraryItemId} uid={activeResult.owner.uid} />
+                                            </div>
+                                        ) : (
+                                            <p role="status">
+                                                {activeResult.kind === "video"
+                                                    ? "Vídeo concluído. A reprodução privada depende da confirmação do registro na biblioteca."
+                                                    : activeResult.reference
+                                                        ? "Resultado salvo; não foi possível confirmar seu tipo para exibição."
+                                                        : "Resultado concluído. Se já foi salvo, consulte a biblioteca; caso contrário, use a recuperação manual da operação."}
+                                                {" "}<Link to="/biblioteca">Abrir biblioteca</Link>
+                                            </p>
+                                        )}
 
                                     </div>
 
@@ -430,7 +590,7 @@ async function sleep(
                                         <>
 
                                             <img
-                                                src={fileUrl}
+                                                src={filePreview}
                                                 alt="Preview"
                                                 className="face-swap-preview-image"
                                             />
@@ -518,6 +678,7 @@ async function sleep(
                                                             user?.uid
                                                         );
 
+                                                        setSelectedFace(file);
                                                         setFaceUrl(url);
 
                                                     }finally{
@@ -548,7 +709,7 @@ async function sleep(
                                         <div className="face-swap-face-preview">
 
                                             <img
-                                                src={faceUrl}
+                                                src={facePreview}
                                                 alt="Rosto"
                                                 className="face-swap-face-image"
                                             />
@@ -586,6 +747,7 @@ async function sleep(
                                                             user?.uid
                                                         );
 
+                                                        setSelectedFace(file);
                                                         setFaceUrl(url);
 
                                                     }finally{
@@ -619,132 +781,37 @@ async function sleep(
                             <button
                                 type="button"
                                 className="face-swap-create-button"
-                                disabled={!canGenerate}
-                                onClick={async () => {
-
-                                    if (resultUrl){
-
-                                        window.open(resultUrl, "_blank");
-
-                                        return;
-
-                                    }
-
-                                    setIsGenerating(true);
-
-                                    const material = await createMaterial(
-                                        fileUrl
-                                    );
-
-                                   
-
-                                    let materialData = null;
-
-                                    while (true) {
-
-                                        await sleep(2000);
-
-                                        materialData = await getMaterial(
-                                            material.materialId
-                                        );
-
-                                      
-
-                                        if (
-                                            materialData.status === "SUCCEEDED"
-                                        ) {
-
-                                            break;
-
-                                        }
-
-                                    }
-
-                                   
-
-                                    const sourceFaceId =
-                                        materialData.faces[0].id;
-
-                                  
-
-                                    if (!user) {
-                                        throw new Error("Usuário não autenticado.");
-                                    }
-
-                                    const task = await createSwapTask(
-                                        materialData.materialId,
-                                        sourceFaceId,
-                                        faceUrl,
-                                        isVideo
-                                            ? "video"
-                                            : isGif
-                                                ? "gif"
-                                                : "image",
-                                        isVideo ? videoDuration : null
-                                    );
-
-                                  
-
-                                    let taskData = null;
-
-                                    while (true) {
-
-                                        await sleep(2000);
-
-                                        taskData = await getSwapTask(
-                                            task.taskId
-                                        );
-
-                                      
-
-                                        if (taskData.taskStatus === "SUCCEEDED") {
-
-                                            const result = await getSwapResult(
-                                                task.taskId
-                                            );
-
-                                          
-
-                                            setResultUrl(
-                                                result.file_url
-                                            );
-
-                                            if (user) {
-
-                                                const firebaseImageUrl =
-                                                    await uploadImageFromUrl(
-                                                        result.file_url,
-                                                        `users/${user.uid}/swaps`
-                                                    );
-
-                                                await createLibraryImage(
-                                                    user.uid,
-                                                    firebaseImageUrl,
-                                                    "face-swap"
-                                                );
-
-                                            }
-
-                                            setIsGenerating(false);
-
-                                            break;
-
-                                        }
-
-                                    }
-
-                                }}
+                                disabled={isGenerating || (activeResult ? !(activeResult.kind === "image" ? privateImageUrl : "") : !canGenerate)}
+                                onClick={() => handleGenerateSwap()}
                             >
 
                                 {
-                                    resultUrl
-                                        ? "Baixar imagem"
+                                    activeResult
+                                        ? activeResult.kind === "video" ? "Use os controles do vídeo" : "Baixar imagem"
                                         : isGenerating
                                             ? "Gerando Face Swap..."
                                             : "Criar Face Swap"
                                 }
 
                             </button> 
+
+                            {sessionReady && pendingIntents.map(intent => (
+                                <button
+                                    key={intent.key}
+                                    type="button"
+                                    className="face-swap-create-button"
+                                    disabled={isGenerating}
+                                    onClick={() => handleGenerateSwap(intent)}
+                                >
+                                    Recuperar operação {intent.key.slice(0, 8)}
+                                </button>
+                            ))}
+
+                            {generationError && (
+                                <p role="alert" className="face-swap-create-blocked-message">
+                                    {generationError}
+                                </p>
+                            )}
 
                             {!isGenerating && generateBlockedMessage && (
                                 isBlockedByInsufficientCredits ? (

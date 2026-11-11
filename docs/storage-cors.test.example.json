@@ -1,0 +1,19 @@
+[
+  {
+    "origin": ["http://127.0.0.1:5198"],
+    "method": ["GET"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Range",
+      "Content-Disposition",
+      "Accept-Ranges",
+      "ETag",
+      "Range",
+      "Authorization",
+      "X-Firebase-Storage-Version",
+      "X-Firebase-AppCheck"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

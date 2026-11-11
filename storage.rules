@@ -3,38 +3,44 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    match /face-swap/{allPaths=**} {
-      allow get: if true;
+    match /face-swap/{userId}/{allPaths=**} {
+      allow get: if request.auth != null
+                    && request.auth.uid == userId;
       allow list: if false;
       allow update, delete: if false;
     }
 
     match /face-swap/{userId}/{fileName} {
-      allow create: if request.auth != null
+      allow create: if resource == null
+                    && request.auth != null
                     && request.auth.uid == userId
                     && fileName.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}([.][a-zA-Z0-9]{1,10})?$');
     }
 
-    match /face-swap-faces/{allPaths=**} {
-      allow get: if true;
+    match /face-swap-faces/{userId}/{allPaths=**} {
+      allow get: if request.auth != null
+                    && request.auth.uid == userId;
       allow list: if false;
       allow update, delete: if false;
     }
 
     match /face-swap-faces/{userId}/{fileName} {
-      allow create: if request.auth != null
+      allow create: if resource == null
+                    && request.auth != null
                     && request.auth.uid == userId
                     && fileName.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}([.][a-zA-Z0-9]{1,10})?$');
     }
 
-    match /video-generation/{allPaths=**} {
-      allow get: if true;
+    match /video-generation/{userId}/{allPaths=**} {
+      allow get: if request.auth != null
+                    && request.auth.uid == userId;
       allow list: if false;
       allow update, delete: if false;
     }
 
     match /video-generation/{userId}/{fileName} {
-      allow create: if request.auth != null
+      allow create: if resource == null
+                    && request.auth != null
                     && request.auth.uid == userId
                     && fileName.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}([.][a-zA-Z0-9]{1,10})?$');
     }

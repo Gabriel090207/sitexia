@@ -104,7 +104,7 @@ class SubmissionTests(unittest.TestCase):
             "app.services.firebase": fixtures.helpers.firebase,
             "app.services.face_swap_materials": fixtures.helpers.ownership,
             "app.services.generation_credits": fixtures.credits,
-        }), patch("firebase_admin.firestore.transactional", side_effect=lambda f: f):
+        }), patch("app.services.firestore_transactions.isolated_transactional", side_effect=lambda f: f):
             fresh = fixtures.helpers.load("restarted_swap_operations", "app/services/face_swap_operations.py")
         fresh_db = Mock()
         fresh_db.collection.side_effect = lambda name: Mock(document=lambda identifier: fixtures.Reference(name, identifier))

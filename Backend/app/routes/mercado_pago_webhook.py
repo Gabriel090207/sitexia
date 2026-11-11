@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 from firebase_admin import firestore
+from app.services.firestore_transactions import isolated_transactional
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 from app.services.firebase import db
@@ -266,7 +267,7 @@ def _validate_order_relationship(
         )
 
 
-@firestore.transactional
+@isolated_transactional
 def reconcile_order_transaction(
     transaction,
     topup_ref,
@@ -351,7 +352,7 @@ def reconcile_order_transaction(
     return internal_status
 
 
-@firestore.transactional
+@isolated_transactional
 def grant_topup_credits_once(
     transaction,
     topup_ref,

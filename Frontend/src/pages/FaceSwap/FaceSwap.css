@@ -1446,3 +1446,16 @@
         font-size: 12px;
     }
 }
+
+.face-swap-private-video {
+    width: 100%;
+    max-width: 720px;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.face-swap-private-video .library-item-video {
+    object-fit: contain;
+}

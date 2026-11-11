@@ -52,6 +52,7 @@ class MaterialTests(unittest.TestCase):
         self.get = AsyncMock(return_value=self.material)
         for target, name, value in (
             (ownership, "db", self.db),
+            (routes, "prepare_original_url", Mock(return_value="https://signed.invalid/original")),
             (routes, "create_material", self.create),
             (routes, "get_material", self.get),
         ):
@@ -168,12 +169,12 @@ class MaterialProviderTests(unittest.IsolatedAsyncioTestCase):
         output = io.StringIO()
         with patch.object(provider, "_sign", return_value=({}, "private-body")), \
              patch.object(provider.httpx, "AsyncClient") as factory, \
-             contextlib.redirect_stdout(output):
+             self.assertLogs(provider.logger, level="INFO") as captured:
             factory.return_value.__aenter__.return_value = client
-            await provider.create_material("https://media.invalid/?token=private-token")
-        self.assertIn("200", output.getvalue())
-        for secret in ("response-secret", "private-body", "private-token"):
-            self.assertNotIn(secret, output.getvalue())
+            await provider.create_material("https://storage.invalid/?token=private-token&X-Goog-Signature=private-signature")
+        self.assertIn("200", "\n".join(captured.output))
+        for secret in ("response-secret", "private-body", "private-token", "private-signature"):
+            self.assertNotIn(secret, "\n".join(captured.output))
 
     async def test_material_query_disables_response_logging(self):
         with patch.object(provider, "get", AsyncMock(return_value={})) as get:
