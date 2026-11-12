@@ -434,10 +434,10 @@ async function handleGenerateSwap() {
                                     type="file"
                                     accept="image/*,video/*"
                                     style={{ display: "none" }}
-                                   onChange={async (event) => {
+                                    onChange={async (event) => {
 
                                         const file = event.target.files?.[0];
-                                        event.currentTarget.value = "";
+                                        event.target.value = "";
 
                                         if (!file) return;
 
@@ -621,7 +621,7 @@ async function handleGenerateSwap() {
                                                 type="file"
                                                 accept="image/*"
                                                 className="face-swap-hidden-input"
-                                                onChange={async (event) => {
+                                                 onChange={async (event) => {
 
                                                     const file = event.target.files?.[0];
 
@@ -690,7 +690,7 @@ async function handleGenerateSwap() {
                                                 type="file"
                                                 accept="image/*"
                                                 className="face-swap-hidden-input"
-                                                onChange={async (event) => {
+                                                 onChange={async (event) => {
 
                                                     const file = event.target.files?.[0];
 
