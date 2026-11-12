@@ -177,6 +177,33 @@ class ReconciliationTests(unittest.IsolatedAsyncioTestCase):
                 await self.run_page(after_id=cursor)
         self.fetch.assert_not_awaited()
 
+    async def test_job_reuses_financial_finalizers_under_repeated_concurrent_scans(self):
+        from app.jobs.face_swap_reconcile import run_scan
+        for status, balance in (('SUCCEEDED', 3.0), ('FAILED', 5.0)):
+            self.state[self.key].update(creditStatus='reserved', status='PROCESSING')
+            self.state[('users', 'alice')] = {'credits': 5.0, 'reservedCredits': 2.0}
+            self.fetch.return_value['taskStatus'] = status
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(lambda _: asyncio.run(run_scan(
+                    reconciliation.reconcile_face_swap_reservations, page_size=1, max_pages=3)), range(2)))
+            self.assertEqual(results, [0, 0])
+            self.assertEqual(self.state[('users', 'alice')], {'credits': balance, 'reservedCredits': 0.0})
+            before = deepcopy(self.state)
+            self.assertEqual(await run_scan(reconciliation.reconcile_face_swap_reservations), 0)
+            self.assertEqual(self.state, before)
+
+    async def test_job_timeout_then_rerun_preserves_and_recovers_funds(self):
+        from app.jobs.face_swap_reconcile import run_scan
+        before = deepcopy(self.state)
+        self.fetch.side_effect = httpx.ReadTimeout('PRIVATE_TOKEN_URL')
+        with self.assertLogs(reconciliation.logger, level='WARNING') as logs:
+            self.assertEqual(await run_scan(reconciliation.reconcile_face_swap_reservations), 2)
+        self.assertNotIn('PRIVATE_TOKEN_URL', str(logs.output))
+        self.assertEqual(self.state, before)
+        self.fetch.side_effect = None
+        self.assertEqual(await run_scan(reconciliation.reconcile_face_swap_reservations), 0)
+        self.assertEqual(self.state[('users', 'alice')], {'credits': 3.0, 'reservedCredits': 0.0})
+
 
 if __name__ == '__main__':
     unittest.main()

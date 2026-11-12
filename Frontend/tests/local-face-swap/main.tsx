@@ -11,8 +11,7 @@ import { createMaterial, getMaterial, createSwapTask, getSwapTask, getSwapResult
 import { uploadScopedFile } from './uploads';
 import { uploadImageFromUrl } from '../../src/services/storage';
 import { createLibraryImage } from '../../src/services/library';
-import { selectIntent, loadIntents, storeIntent, recoverSwapTask, swapOperationError } from '../../src/pages/FaceSwap/faceSwapIntent';
-import type { SwapIntent } from '../../src/pages/FaceSwap/faceSwapIntent';
+import { createIntent, startSwapTask, swapOperationError } from '../../src/pages/FaceSwap/faceSwapIntent';
 import { waitForFaceSwap } from '../../src/pages/FaceSwap/faceSwapPolling';
 import '../../src/styles/global.css';
 
@@ -37,13 +36,15 @@ async function prepared(scenario = 'success', release = true) {
     const uid = await account(scenario, release);
     const original = await uploadScopedFile(fixtureFile(), 'face-swap', uid);
     const target = await uploadScopedFile(fixtureFile(), 'face-swap-faces', uid);
-    const intent = selectIntent([], { original, target, mediaType: 'image', duration: null });
-    let records: SwapIntent[] = [];
-    const remember = (item: SwapIntent) => { records = storeIntent(sessionStorage, uid, records, item); };
-    remember(intent);
-    const services = { createMaterial, getMaterial, createSwapTask,
+    const intent = createIntent({ original, target, mediaType: 'image', duration: null });
+    let materialId = '', sourceFaceId = '';
+    const services = { createMaterial, getMaterial,
+        createSwapTask: async (...args: Parameters<typeof createSwapTask>) => {
+            [materialId, sourceFaceId] = args;
+            return createSwapTask(...args);
+        },
         wait: (get: () => Promise<unknown>, field: 'status' | 'taskStatus', label: string) => waitForFaceSwap(get, field, label, 5000, 1) };
-    return { uid, original, intent, remember, services };
+    return { uid, original, intent, services, get materialId() { return materialId; }, get sourceFaceId() { return sourceFaceId; } };
 }
 async function expectStatus(action: () => Promise<unknown>, status: number) {
     try { await action(); throw new Error('Expected HTTP ' + status); }
@@ -59,18 +60,11 @@ async function waitBalance(value: string) {
 async function suite(report: (text: string) => void) {
     let p = await prepared('success', false);
     const initial = await state();
-    const task = await recoverSwapTask(p.intent, p.original, p.remember, p.services);
+    const task = await startSwapTask(p.intent, p.original, p.services);
     let s = await state();
     check(s.user.credits === 10 && s.user.reservedCredits === 0.1, 'Reserve mismatch');
     await waitBalance('9.90');
     report('PASS upload to Storage emulator → material → reserve → task; React balance 9,9');
-    const before = await state();
-    const restored = loadIntents(sessionStorage, p.uid)[0];
-    await pause(100);
-    check((await state()).taskPosts === before.taskPosts, 'Restore caused POST');
-    check(await recoverSwapTask(restored, undefined, p.remember, p.services) === task, 'Restore changed task');
-    check((await state()).taskPosts === before.taskPosts, 'Known task caused POST');
-    report('PASS restored task recovery without material/upload/task POST');
     await control({ uid: p.uid, release: true });
     await getSwapTask(task); await getSwapTask(task);
     const result = await getSwapResult(task);
@@ -78,11 +72,11 @@ async function suite(report: (text: string) => void) {
     await createLibraryImage(p.uid, saved, 'face-swap');
     s = await state();
     check(s.user.credits === 9.9 && s.user.reservedCredits === 0, 'Success charge mismatch');
-    await createSwapTask(p.intent.materialId!, p.intent.sourceFaceId!, p.intent.target, 'image', null, p.intent.key);
+    await createSwapTask(p.materialId, p.sourceFaceId, p.intent.target, 'image', null, p.intent.key);
     check((await state()).taskCreates === initial.taskCreates + 1, 'Duplicate task');
-    report('PASS SUCCEEDED charged once; result saved in Storage/Firestore emulators; duplicate key recovered');
+    report('PASS SUCCEEDED charged once; result saved in Storage/Firestore emulators; duplicate key does not create another task');
     p = await prepared('failed');
-    const failed = await recoverSwapTask(p.intent, p.original, p.remember, p.services);
+    const failed = await startSwapTask(p.intent, p.original, p.services);
     await getSwapTask(failed); await getSwapTask(failed);
     s = await state(); check(s.user.credits === 10 && s.user.reservedCredits === 0, 'Failure release mismatch');
     await waitBalance('10'); report('PASS FAILED releases once; React available balance 10');
@@ -93,28 +87,25 @@ async function suite(report: (text: string) => void) {
         return response;
     });
     const count = (await state()).taskCreates;
-    try { await recoverSwapTask(p.intent, p.original, p.remember, p.services); throw new Error('Expected loss'); }
+    try { await startSwapTask(p.intent, p.original, p.services); throw new Error('Expected loss'); }
     catch (error) { check((error as { code?: string }).code === 'ERR_NETWORK', 'Wrong response loss error'); }
     finally { api.interceptors.response.eject(interceptor); }
-    check(p.intent.phase === 'task-requested' && !p.intent.taskId, 'Intent not preserved');
     const posts = (await state()).taskPosts; await pause(100);
     check((await state()).taskPosts === posts, 'Automatic retry');
-    await recoverSwapTask(p.intent, undefined, p.remember, p.services);
-    check((await state()).taskCreates === count + 1, 'Recovery duplicated task');
-    report('PASS lost HTTP response + network error; no auto retry; manual same-key recovery');
-    const conflict = await expectStatus(() => createSwapTask(p.intent.materialId!, '6', p.intent.target, 'image', null, p.intent.key), 409);
+    check((await state()).taskCreates === count + 1, 'Response loss duplicated task');
+    report('PASS lost HTTP response + network error; no auto retry; no automatic resend');
+    const conflict = await expectStatus(() => createSwapTask(p.materialId, '6', p.intent.target, 'image', null, p.intent.key), 409);
     check(swapOperationError(conflict)?.includes('conflito'), '409 frontend mapping');
-    const invalid = await expectStatus(() => api.post('/swap/task', { material_id: p.intent.materialId, source_face_id: '5', target_face_url: p.intent.target }), 422);
+    const invalid = await expectStatus(() => api.post('/swap/task', { material_id: p.materialId, source_face_id: '5', target_face_url: p.intent.target }), 422);
     check(swapOperationError(invalid)?.includes('rejeitou'), '422 frontend mapping');
     report('PASS real HTTP 409/422 contracts and frontend messages');
     p = await prepared('unconfirmed');
-    const ambiguity = await expectStatus(() => recoverSwapTask(p.intent, p.original, p.remember, p.services), 502);
+    const ambiguity = await expectStatus(() => startSwapTask(p.intent, p.original, p.services), 502);
     check(swapOperationError(ambiguity)?.includes('reserva pode continuar'), 'Ambiguity message');
     const ambiguousCount = (await state()).taskCreates;
-    await expectStatus(() => recoverSwapTask(p.intent, undefined, p.remember, p.services), 409);
     s = await state();
     check(s.taskCreates === ambiguousCount && s.user.credits === 10 && s.user.reservedCredits === 0.1, 'Ambiguous task resent/released');
-    report('PASS provider timeout/lost taskId retains reserve; manual recovery pending 409, no resend');
+    report('PASS provider timeout/lost taskId retains reserve; no resend');
 }
 function Harness() {
     const [reports, setReports] = useState<string[]>([]);
@@ -136,7 +127,7 @@ function Harness() {
             }
         }}>Prepare UI fixture uploads</button>
         <button disabled={busy} onClick={() => control({ uid: auth.currentUser!.uid, release: true })}>Complete simulated task</button>
-        <button disabled={busy} onClick={() => location.reload()}>Refresh page (manual recovery)</button>
+        <button disabled={busy} onClick={() => location.reload()}>Refresh page</button>
         <pre style={{ whiteSpace: 'pre-wrap' }}>{reports.join('\n')}</pre>
         <p>External requests blocked by CSP. No published configuration loaded.</p>
     </aside><FaceSwap /></>;

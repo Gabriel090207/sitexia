@@ -52,8 +52,8 @@ function prepare(overrides = {}) {
     const calls = [], errors = [], loading = [], results = [];
     const scope = {
         ...helpers, ...intents, generationInFlight: { current: false }, activeResult: null, privateImageUrl: "", pageMounted: { current: true }, resultUrl: '', canGenerate: true,
-        sessionReady: true, auth: { currentUser: { uid: 'user' } }, intentsRef: { current: { uid: 'user', items: [] } },
-        recoverSwapTask: (intent, original, remember, services) => intents.recoverSwapTask(intent, original, remember,
+        auth: { currentUser: { uid: 'user' } },
+        startSwapTask: (intent, original, services) => intents.startSwapTask(intent, original,
             { ...services, wait: (fetch, field, label) => waitForFaceSwap(fetch, field, label, 200, 0) }),
         user: { uid: 'user' }, fileUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/face-swap%2Fuser%2Foriginal.png?token=secret', faceUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/face-swap-faces%2Fuser%2Fface.png?token=secret', isVideo: false, isGif: false, videoDuration: 0,
         setIsGenerating: value => loading.push(value), setGenerationError: value => errors.push(value),
@@ -73,7 +73,6 @@ function prepare(overrides = {}) {
         ...overrides,
     };
     scope.auth.currentUser = scope.user;
-    scope.rememberIntent = intent => { scope.intentsRef.current.items = [...scope.intentsRef.current.items.filter(item => item.key !== intent.key), { ...intent }]; };
     vm.runInNewContext(compile(handler + '\nglobalThis.run = handleGenerateSwap;'), scope);
     return { scope, calls, errors, loading, results };
 }
@@ -120,86 +119,25 @@ test('handler: success preserves library arguments', async () => {
     assert.deepEqual(state.calls.at(-1), ['library', 'user', 'saved', 'face-swap']);
     assert.equal(state.errors.at(-1), '');
 });
-
-function memoryStorage() {
-    const data = new Map();
-    return { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), data };
-}
 const inputs = {
     original: 'https://firebasestorage.googleapis.com/v0/b/demo/o/face-swap%2Fuser%2Foriginal.png?token=original-secret',
     target: 'https://firebasestorage.googleapis.com/v0/b/demo/o/face-swap-faces%2Fuser%2Fface.png?token=face-secret',
     mediaType: 'image', duration: null,
 };
-test('new intent uses UUID, same inputs preserve key, changed inputs generate another', () => {
-    const first = intents.selectIntent([], inputs);
-    assert.match(first.key, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    assert.equal(intents.selectIntent([first], { ...inputs, target: inputs.target.replace('face-secret', 'rotated') }).key, first.key);
-    assert.notEqual(intents.selectIntent([first], { ...inputs, target: inputs.target.replace('face.png', 'new.png') }).key, first.key);
-});
-test('refresh only restores state, strips token URLs, isolates accounts and makes no calls', () => {
-    const storage = memoryStorage();
-    const first = intents.selectIntent([], inputs);
-    first.materialId = '123'; first.sourceFaceId = '456'; first.phase = 'task-requested';
-    intents.storeIntent(storage, 'user', [], first);
-    const restored = intents.loadIntents(storage, 'user');
-    assert.equal(restored[0].key, first.key);
-    assert.equal(restored[0].materialId, '123');
-    assert.equal(intents.loadIntents(storage, 'another-user').length, 0);
-    assert.ok(!JSON.stringify([...storage.data.values()]).includes('secret'));
-    assert.ok(!JSON.stringify([...storage.data.values()]).includes('token='));
-});
-test('existing task resumes GET polling without material recreation or task POST', async () => {
-    const state = prepare();
-    const intent = { ...intents.selectIntent([], inputs), materialId: '123', sourceFaceId: '456', taskId: '789', phase: 'task-known' };
-    await state.scope.run(intent);
-    assert.ok(!state.calls.includes('material'));
-    assert.ok(!state.calls.includes('task'));
-    assert.equal(state.results.length, 0);
-});
-test('creation timeout preserves key and exact intent for explicit recovery', async () => {
-    const state = prepare({ createSwapTask: async (...args) => { state.calls.push(['submit', ...args]); throw Object.assign(new Error('timeout'), { code: 'ECONNABORTED' }); } });
-    await state.scope.run();
-    const preserved = state.scope.intentsRef.current.items[0];
-    assert.equal(preserved.phase, 'task-requested');
-    assert.equal(state.calls.filter(call => Array.isArray(call) && call[0] === 'submit').length, 1);
-    const key = preserved.key;
-    let replayArgs;
-    state.scope.createSwapTask = async (...args) => { replayArgs = args; return { taskId: '789' }; };
-    await state.scope.run(preserved);
-    assert.equal(replayArgs.at(-1), key);
-    assert.equal(state.calls.filter(call => call === 'material').length, 1);
-    assert.equal(state.scope.intentsRef.current.items[0].materialId, '123');
-});
 for (const [status, code, message] of [
     [409, 'operation_pending_or_cancelled', /sem confirmação|cancelada/],
     [409, undefined, /conflito/], [422, undefined, /rejeitou/],
     [502, 'submission_unconfirmed', /reserva pode continuar/],
 ]) {
-    test(`HTTP ${status}/${code} preserves operation without automatic retry`, async () => {
+    test(`HTTP ${status}/${code} does not retry automatically`, async () => {
         let posts = 0;
         const state = prepare({ createSwapTask: async () => { posts++; throw { response: { status, data: { detail: { code } } } }; } });
         await state.scope.run();
         assert.equal(posts, 1);
         assert.match(state.errors.at(-1), message);
-        assert.equal(state.scope.intentsRef.current.items[0].phase, 'task-requested');
         assert.equal(state.loading.at(-1), false);
     });
 }
-test('unconfirmed material is not automatically recreated after reload', async () => {
-    const intent = { ...intents.selectIntent([], inputs), phase: 'material-requested' };
-    const state = prepare();
-    await state.scope.run(intent);
-    assert.match(state.errors.at(-1), /material.*sem confirmação/);
-    assert.ok(!state.calls.includes('material'));
-    assert.ok(!state.calls.includes('task'));
-});
-test('saved task recovery does not upload or register again', async () => {
-    const intent = { ...intents.selectIntent([], inputs), taskId: '789', phase: 'task-known', saved: true };
-    const state = prepare();
-    await state.scope.run(intent);
-    assert.equal(state.results.length, 0);
-    assert.equal(state.calls.length, 0);
-});
 test('API adapter sends Idempotency-Key header with unchanged body fields', async () => {
     const apiModule = { exports: {} };
     let args;
@@ -212,50 +150,6 @@ test('API adapter sends Idempotency-Key header with unchanged body fields', asyn
     assert.equal(args[0], '/swap/task');
     assert.equal(args[2].headers['Idempotency-Key'], key);
     assert.equal(args[1].material_id, '123');
-});
-
-test('changing original or media parameters starts a distinct intent', () => {
-    const first = intents.selectIntent([], inputs);
-    for (const change of [
-        { original: inputs.original.replace('original.png', 'another.png') },
-        { mediaType: 'video', duration: 16 },
-    ]) assert.notEqual(intents.selectIntent([first], { ...inputs, ...change }).key, first.key);
-});
-test('corrupt session data fails closed instead of silently losing keys', () => {
-    const storage = memoryStorage();
-    storage.setItem('xia:face-swap:intents:v1:user', '{invalid');
-    assert.throws(() => intents.loadIntents(storage, 'user'), /operações preservadas/);
-});
-test('pending attempts are not evicted when session reaches its limit', () => {
-    const storage = memoryStorage();
-    let records = [];
-    for (let i = 0; i < 20; i++) {
-        const intent = intents.selectIntent([], { ...inputs, target: inputs.target.replace('face.png', `${i}.png`) });
-        records = intents.storeIntent(storage, 'user', records, intent);
-    }
-    const before = storage.getItem('xia:face-swap:intents:v1:user');
-    assert.throws(() => intents.storeIntent(storage, 'user', records, intents.selectIntent([], inputs)), /operações pendentes/);
-    assert.equal(storage.getItem('xia:face-swap:intents:v1:user'), before);
-});
-test('session persistence failure prevents any material or task request', async () => {
-    const state = prepare();
-    state.scope.rememberIntent = () => { throw new helpers.FaceSwapFlowError('Não foi possível preservar a operação'); };
-    await state.scope.run();
-    assert.equal(state.calls.length, 0);
-    assert.equal(state.loading.at(-1), false);
-});
-
-// Removing transport tokens must preserve the same persisted user intention.
-test('token-free references recover existing token-based intention without a new key', () => {
-    const old = intents.selectIntent([], inputs);
-    const storage = memoryStorage();
-    intents.storeIntent(storage, 'user', [], old);
-    const loaded = intents.loadIntents(storage, 'user');
-    const recovered = intents.selectIntent(loaded, { ...inputs,
-        original: inputs.original.split('?')[0], target: inputs.target.split('?')[0] });
-    assert.equal(recovered.key, old.key);
-    assert.equal(recovered.original, old.original);
-    assert.equal(recovered.target, old.target);
 });
 
 for (const reference of [
@@ -276,14 +170,14 @@ test('library registration failure retains the saved reference for private displ
     assert.equal(state.scope.presentation.reference,'saved');
     assert.match(state.errors.at(-1),/concluído e salvo.*biblioteca/);
 });
-test('upload failure leaves manual recovery without registering a nonexistent image',async()=>{
+test('upload failure does not register a nonexistent image',async()=>{
     const state=prepare({saveFaceSwapResult:async()=>{throw Error('Storage');}});
     await state.scope.run();
     assert.equal(state.scope.presentation.kind,'image');
     assert.equal(state.scope.presentation.reference,undefined);
     assert.ok(!state.calls.some(call=>Array.isArray(call)&&call[0]==='library'));
     assert.equal(state.calls.filter(call=>call==='task').length,1);
-    assert.match(state.errors.at(-1),/recuperação manual/);
+    assert.match(state.errors.at(-1),/não foi possível salvar/);
 });
 for(const change of ['logout','other-user','unmount'])test(`late result is not presented after ${change}`,async()=>{
     let finish;
@@ -313,28 +207,6 @@ test('ambiguous task output uses the media type validated by the save helper',as
     assert.equal(state.scope.presentation.reference,'saved');
     assert.equal(state.results.length,0);
 });
-test('completed saved task without a local reference is not uploaded a second time',async()=>{
-    const intent={...intents.selectIntent([],inputs),taskId:'789',phase:'task-known',saved:true};
-    const state=prepare();await state.scope.run(intent);
-    assert.equal(state.calls.length,0);
-    assert.equal(state.scope.presentation.reference,undefined);
-    assert.equal(state.results.length,0);
-});
-
-test('recovering a saved video after registration failure does not upload or create another task',async()=>{
-    const url='https://provider.invalid/result.mp4';
-    const state=prepare({getSwapTask:async()=>({taskStatus:'SUCCEEDED',videoUrl:url}),getSwapResult:async()=>({file_url:url}),
-        createLibraryVideo:async()=>{throw Error('Firestore');}});
-    await state.scope.run();
-    assert.equal(state.scope.presentation.reference,'saved');assert.match(state.errors.at(-1),/concluído e salvo/);
-    const intent=state.scope.intentsRef.current.items[0];
-    state.scope.activeResult=state.scope.presentation;
-    state.scope.createLibraryVideo=async(...args)=>{state.calls.push(['library-video',...args]);return 'recovered-library-id';};
-    await state.scope.run(intent);
-    assert.equal(state.calls.filter(call=>call==='task').length,1);
-    assert.equal(state.calls.filter(call=>call==='upload').length,1);
-    assert.equal(state.scope.intentsRef.current.items[0].saved,true);
-});
 
 test('private video playback receives actual ID returned by registration, never a fabricated task ID',async()=>{
     const url='https://provider.invalid/output.mp4';
@@ -353,36 +225,6 @@ test('failed registration preserves video reference without granting playback',a
     assert.equal(state.scope.presentation.reference,'saved');assert.equal(state.scope.presentation.libraryItemId,undefined);
     assert.match(state.errors.at(-1),/concluído e salvo.*registro/);
 });
-for(const saved of [true,false])test(`manual recovery finds a confirmed library video without duplicate upload/registration (saved=${saved})`,async()=>{
-    const url='https://provider.invalid/output.mp4',lookups=[];
-    const intent={...intents.selectIntent([],inputs),taskId:'789',phase:'task-known',saved};
-    const state=prepare({getSwapTask:async()=>({taskStatus:'SUCCEEDED',videoUrl:url}),getSwapResult:async()=>({file_url:url}),
-        findFaceSwapVideo:async(...args)=>{lookups.push(args);return {id:'real-existing-id',reference:'existing-reference'};}});
-    await state.scope.run(intent);
-    assert.deepEqual(lookups,[['user','789']]);assert.equal(state.calls.length,0);
-    assert.equal(state.scope.presentation.libraryItemId,'real-existing-id');
-    assert.equal(state.scope.presentation.reference,'existing-reference');assert.equal(state.results.length,0);
-});
-test('confirmed current-session ID is reused without a query or another upload',async()=>{
-    const url='https://provider.invalid/output.mp4';
-    const state=prepare({getSwapTask:async()=>({taskStatus:'SUCCEEDED',videoUrl:url}),getSwapResult:async()=>({file_url:url})});
-    await state.scope.run();
-    const count=state.calls.length;
-    state.scope.activeResult=state.scope.presentation;
-    state.scope.findFaceSwapVideo=async()=>{throw Error('should not query');};
-    await state.scope.run(state.scope.intentsRef.current.items[0]);
-    assert.equal(state.calls.length,count);assert.equal(state.scope.presentation.libraryItemId,'actual-library-id');
-});
-test('logout during recovery query ignores the old library response',async()=>{
-    const url='https://provider.invalid/output.mp4';let finish;
-    const state=prepare({getSwapTask:async()=>({taskStatus:'SUCCEEDED',videoUrl:url}),getSwapResult:async()=>({file_url:url}),
-        findFaceSwapVideo:()=>new Promise(resolve=>{finish=resolve;})});
-    const intent={...intents.selectIntent([],inputs),taskId:'789',phase:'task-known',saved:true};
-    const pending=state.scope.run(intent);
-    while(!finish)await new Promise(resolve=>setTimeout(resolve,1));
-    state.scope.auth.currentUser=null;finish({id:'private-id',reference:'saved'});await pending;
-    assert.equal(state.scope.presentation,undefined);assert.equal(state.calls.length,0);
-});
 test('Face Swap reuses native private player and removes provider playback fallback',()=>{
     assert.ok(source.includes('<PrivateLibraryVideo'));
     assert.ok(source.includes('itemId={activeResult.libraryItemId}'));
@@ -390,4 +232,124 @@ test('Face Swap reuses native private player and removes provider playback fallb
     assert.ok(!source.includes('setResultUrl('));
     assert.ok(source.includes('<PrivateFaceSwapImage'));
     assert.ok(!source.includes('<video')); // One existing player/controller only.
+});
+
+for (const [mediaType, duration] of [['image', null], ['gif', null], ['video', 16]]) {
+    test(`new ${mediaType} generations use current files and distinct idempotency keys`, async () => {
+        const submitted = [], originals = [];
+        const state = prepare({ isVideo: mediaType === 'video', isGif: mediaType === 'gif', videoDuration: duration,
+            createMaterial: async url => { originals.push(url); return {materialId:'123'}; },
+            createSwapTask: async (...args) => { submitted.push(args); return {taskId:'789'}; } });
+        await state.scope.run();
+        const firstOriginal = state.scope.fileUrl;
+        state.scope.fileUrl = firstOriginal.replace('original.png', 'current.png');
+        state.scope.faceUrl = state.scope.faceUrl.replace('face.png', 'current-face.png');
+        await state.scope.run();
+        assert.deepEqual(originals, [firstOriginal, state.scope.fileUrl]);
+        assert.equal(submitted.length, 2);
+        assert.notEqual(submitted[0][5], submitted[1][5]);
+        assert.match(submitted[0][5], /^[0-9a-f-]{36}$/);
+        assert.equal(submitted[1][2], state.scope.faceUrl.split('?')[0]);
+        assert.equal(submitted[1][3], mediaType);
+        assert.equal(submitted[1][4], duration);
+    });
+}
+test('Face Swap has no persisted intentions, restoration, or recovery controls', () => {
+    const flow = read('../src/pages/FaceSwap/faceSwapIntent.ts');
+    assert.doesNotMatch(source + flow, /sessionStorage|localStorage|loadIntents|storeIntent|pendingIntents|sessionReady|recoverSwapTask|recupera|Recupera/);
+    assert.equal(intents.loadIntents, undefined);
+    assert.equal(intents.storeIntent, undefined);
+    assert.equal(intents.recoverSwapTask, undefined);
+});
+test('submission failure sends once and clears the active lock', async () => {
+    let posts = 0;
+    const state = prepare({createSwapTask: async () => { posts++; throw Error('network'); }});
+    await state.scope.run();
+    assert.equal(posts, 1);
+    assert.deepEqual(state.loading, [true, false]);
+    assert.equal(state.scope.generationInFlight.current, false);
+});
+
+test('logout during material analysis prevents task submission', async () => {
+    const state = prepare({ getMaterial: async () => {
+        state.scope.auth.currentUser = null;
+        return {materialId:'123', status:'SUCCEEDED', faces:[{id:'456'}]};
+    } });
+    await state.scope.run();
+    assert.ok(!state.calls.includes('task'));
+    assert.equal(state.scope.generationInFlight.current, false);
+});
+
+// Inspect the real JSX and execute its file handler without browser dependencies.
+const attribute = (node, name) => node.attributes.properties.find(item => item.name?.getText(ast) === name);
+const fileInputs = [];
+function collectFileInputs(node) {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(ast) === 'input'
+        && attribute(node, 'ref')?.initializer?.expression?.getText(ast) === 'fileInputRef') fileInputs.push(node);
+    ts.forEachChild(node, collectFileInputs);
+}
+collectFileInputs(ast);
+test('one file input stays outside selection/loading/preview branches and both buttons target it', () => {
+    assert.equal(fileInputs.length, 1);
+    const input = fileInputs[0];
+    assert.equal(attribute(input, 'accept').initializer.text, 'image/*,video/*');
+    assert.ok(ts.isJsxElement(input.parent));
+    assert.match(input.parent.openingElement.getText(ast), /face-swap-upload-dropzone/);
+    const branches = input.parent.children.find(child => ts.isJsxExpression(child)
+        && child.expression && ts.isConditionalExpression(child.expression));
+    assert.equal(branches.expression.condition.getText(ast), 'loadingFile');
+    assert.match(branches.getText(ast), /!fileUrl/);
+    const buttons = [];
+    function collect(node) {
+        if (ts.isJsxElement(node) && node.openingElement.tagName.getText(ast) === 'button') buttons.push(node);
+        ts.forEachChild(node, collect);
+    }
+    collect(branches);
+    assert.equal(buttons.length, 2);
+    let clicks = 0;
+    for (const button of buttons) {
+        const handler = attribute(button.openingElement, 'onClick').initializer.expression.getText(ast);
+        vm.runInNewContext(compile(`(${handler})();`), { fileInputRef: { current: { click: () => clicks++ } } });
+    }
+    assert.equal(clicks, 2);
+});
+function uploadHandler(authorized = true) {
+    const calls = [];
+    const scope = {
+        canUpload: () => authorized, user: {uid:'user'},
+        setLoadingFile: value => calls.push(['loading',value]),
+        setSelectedFile: file => calls.push(['selected',file]),
+        getVideoDuration: async () => 16,
+        setVideoDuration: value => calls.push(['duration',value]),
+        uploadScopedFile: async (...args) => { calls.push(['upload',...args]); return 'uploaded'; },
+        setFileUrl: value => calls.push(['url',value]),
+    };
+    const handler = attribute(fileInputs[0], 'onChange').initializer.expression.getText(ast);
+    vm.runInNewContext(compile(`globalThis.change = ${handler};`), scope);
+    return {change:scope.change,calls};
+}
+for (const type of ['image/png','image/gif','video/mp4']) test(`file selection and replacement preserve upload handling: ${type}`, async () => {
+    const {change,calls} = uploadHandler();
+    const file = {type};
+    const input = {files:[file],value:'selected-file'};
+    await change({target:input,currentTarget:input});
+    assert.equal(input.value,''); // A subsequent choice of the same file can emit change.
+    assert.deepEqual(calls, [['loading',true],['selected',file],['duration',type.startsWith('video/')?16:0],
+        ['upload',file,'face-swap','user'],['url','uploaded'],['loading',false]]);
+    input.files = [{type:'image/jpeg'}];
+    await change({target:input,currentTarget:input});
+    assert.equal(calls.filter(call=>call[0]==='upload').length,2);
+    assert.equal(calls.filter(call=>call[0]==='selected').at(-1)[1],input.files[0]);
+});
+test('cancelled file selection leaves current application state untouched', async () => {
+    const {change,calls} = uploadHandler();
+    const input = {files:[],value:''};
+    await change({target:input,currentTarget:input});
+    assert.deepEqual(calls,[]);
+});
+test('unauthorized file selection cannot start an upload or replace application state', async () => {
+    const {change,calls} = uploadHandler(false);
+    const input = {files:[{type:'image/png'}],value:'file'};
+    await change({target:input,currentTarget:input});
+    assert.deepEqual(calls,[]);
 });

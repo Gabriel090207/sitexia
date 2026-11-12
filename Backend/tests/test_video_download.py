@@ -125,3 +125,9 @@ class VideoDownloadTests(unittest.TestCase):
         self.blob.download_as_bytes.assert_not_called()
         self.ref.set.assert_not_called()
         self.ref.update.assert_not_called()
+
+    def test_forged_library_task_id_does_not_authorize_foreign_video_download(self):
+        self.item.update({'taskId': 'bob-task', 'videoUrl': self.url('users/bob/videos/output.mp4')})
+        self.assertEqual(self.request().status_code, 403)
+        self.blob.generate_signed_url.assert_not_called()
+        self.blob.download_as_bytes.assert_not_called()

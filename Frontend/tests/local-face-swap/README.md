@@ -2,7 +2,7 @@
 
 Never deploy this fixture. It is outside the normal application entry point.
 It uses the real FaceSwap component, API adapter, AuthProvider, Firestore
-subscription, intent persistence, uploads and library services. Only the test
+subscription, active generation, uploads and library services. Only the test
 entry/configuration and external provider are substituted.
 
 ## Isolation
@@ -39,13 +39,14 @@ cd Frontend
 
 Open `http://127.0.0.1:5179/` in a separate browser window. Select **Run isolated
 integration checks**. The report covers success, failure, same-key duplication,
-response loss injected in the Axios response handler, manual recovery, 409/422,
+response loss injected in the Axios response handler, absence of automatic retries, 409/422,
 and a simulated provider timeout whose task ID is lost.
 
 For actual component interaction: **Prepare UI fixture uploads**, then **Criar
 Face Swap**. The simulator keeps the task RUNNING until **Complete simulated
-task** is selected. Reload first to verify no automatic second generation; select
-**Recuperar operação** and complete the simulated task.
+task** is selected. Complete the task while the page remains open to verify saving.
+In a separate attempt, reload while it is running: no recovery button or restored
+operation should appear, and no second generation should start automatically.
 
 ## Important differences and limits
 

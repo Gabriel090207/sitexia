@@ -269,6 +269,14 @@ def claim_pix_order_creation(
             detail="Esta tentativa não é compatível com pagamento Pix.",
         )
 
+    if topup.get("credits_granted") is True or topup.get("status") in {
+        "approved", "completed",
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A recarga já foi concluída.",
+        )
+
     if attempt.get("mercado_pago_order_id"):
         return {"existing_attempt": attempt}
 

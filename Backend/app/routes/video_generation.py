@@ -12,11 +12,8 @@ from starlette.concurrency import run_in_threadpool
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from google.cloud.firestore_v1.base_query import FieldFilter
-
 from app.dependencies.auth import AuthenticatedUser, get_current_user
 
-from app.services.firebase import db
 from app.services.video_reference import prepare_video_reference
 from app.services.generation_credits import (
     reserve_generation_credits,
@@ -201,26 +198,29 @@ async def create_image_to_video(
     )
 
 
+def authorize_video_task(task_id: str, uid: str) -> dict:
+    """Only backend-written generation bindings prove task ownership.
+
+    A saved owned object proves access to that copy, not to a provider task ID
+    written in the library. Legacy tasks without this binding stay denied.
+    """
+    try:
+        generation = get_generation_by_task_for_user(task_id, uid)
+    except ValueError:
+        raise HTTPException(404, "Geração não encontrada.") from None
+    except Exception:
+        raise HTTPException(503, "Não foi possível validar a geração.") from None
+    if generation is None or generation.get("type") != "video-generation":
+        raise HTTPException(404, "Geração não encontrada.")
+    return generation
+
+
 @router.get("/task/{task_id}")
 async def get_video_generation_task(
     task_id: str,
     current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ):
-    try:
-        generation = get_generation_by_task_for_user(task_id, current_user.uid)
-    except ValueError as error:
-        raise HTTPException(status_code=404, detail="Geração não encontrada.") from error
-
-    if generation is None:
-        # Legadas já cobradas: apenas consulta, e somente com prova de propriedade.
-        legacy = list(
-            db.collection("users").document(current_user.uid).collection("swaps")
-            .where(filter=FieldFilter("taskId", "==", task_id)).limit(1).stream()
-        )
-        if not legacy:
-            raise HTTPException(status_code=404, detail="Geração não encontrada.")
-    elif generation.get("type") != "video-generation":
-        raise HTTPException(status_code=404, detail="Geração não encontrada.")
+    generation = authorize_video_task(task_id, current_user.uid)
 
     try:
         task = await get_video_task(task_id)
@@ -245,6 +245,8 @@ async def extend_video(
         Depends(get_current_user),
     ],
 ):
+
+    authorize_video_task(request.source_task_id, current_user.uid)
 
     return await create_reserved_video(
         current_user.uid,

@@ -8,17 +8,14 @@ import {
 
 import {
     Link,
-    useNavigate,
 } from "react-router-dom";
 
 import {
     doc,
     getDoc,
-    deleteDoc,
 } from "firebase/firestore";
 
 import {
-    deleteUser,
     sendPasswordResetEmail,
 } from "firebase/auth";
 
@@ -51,8 +48,6 @@ interface UserData {
 }
 
 export default function Profile() {
-
-    const navigate = useNavigate();
 
     const {
         user,
@@ -161,39 +156,6 @@ export default function Profile() {
         );
 
     }
-
-    async function handleDeleteAccount() {
-
-        if (!user) {
-            return;
-        }
-
-        try {
-
-            await deleteDoc(
-                doc(
-                    db,
-                    "users",
-                    user.uid
-                )
-            );
-
-            await deleteUser(user);
-
-            navigate("/");
-
-        } catch {
-
-            showToast(
-                "Não foi possível excluir",
-                "Por segurança, faça login novamente antes de excluir sua conta.",
-                "error"
-            );
-
-        }
-
-    }
-
 
     if (loading || loadingData) {
 
@@ -440,13 +402,13 @@ export default function Profile() {
 
                         <h3>
 
-                            Excluir conta
+                            Exclusão de conta indisponível
 
                         </h3>
 
                         <p>
 
-                            Esta ação é permanente e todos os seus dados serão removidos.
+                            A exclusão automática está temporariamente indisponível para preservar seu saldo, pagamentos e operações em andamento. Sua conta e seus dados não foram excluídos.
 
                         </p>
 
@@ -457,18 +419,11 @@ export default function Profile() {
                                 onClick={closeDeleteModal}
                             >
 
-                                Cancelar
+                                Entendi
 
                             </button>
 
-                            <button
-                                className="profile-confirm"
-                                onClick={handleDeleteAccount}
-                            >
 
-                                Excluir
-
-                            </button>
 
                         </div>
 

@@ -216,8 +216,10 @@ def _validate_order_relationship(
         )
 
     payment = _first_payment(order)
-    order_currency = order.get("currency") or payment.get("currency_id")
-    if order_currency is not None and order_currency != "BRL":
+    # Orders may report currency_id at the order level. Validate every supplied
+    # currency field instead of letting a BRL alias hide a conflicting value.
+    currencies = [order.get("currency"), order.get("currency_id"), payment.get("currency_id")]
+    if any(value is not None and value != "BRL" for value in currencies):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Moeda da Order incompatível com a recarga.",

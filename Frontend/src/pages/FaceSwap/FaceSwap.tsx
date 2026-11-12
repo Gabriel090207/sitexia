@@ -1,7 +1,6 @@
 import PrivateLibraryVideo from "../Library/PrivateLibraryVideo";
 import PrivateFaceSwapImage from "./PrivateFaceSwapImage";
-import { loadIntents, storeIntent, selectIntent, recoverSwapTask, swapOperationError } from "./faceSwapIntent";
-import type { SwapIntent } from "./faceSwapIntent";
+import { createIntent, startSwapTask, swapOperationError } from "./faceSwapIntent";
 import { FaceSwapFlowError, requireResultUrl, waitForFaceSwap } from "./faceSwapPolling";
 import { getGenerationErrorMessage } from "../../utils/generationErrors";
 import { formatCredits } from "../../utils/formatCredits";
@@ -45,7 +44,6 @@ import {
 import {
     createLibraryImage,
     createLibraryVideo,
-    findFaceSwapVideo,
 } from "../../services/library";
 
 export default function FaceSwap() {
@@ -55,10 +53,6 @@ const [uploadAuthError, setUploadAuthError] = useState("");
 const canUpload = () => allowAuthenticatedUpload(user, authLoading, auth.currentUser, setUploadAuthError);
 
 const [credits, setCredits] = useState<number>(0);
-const intentsRef = useRef<{ uid: string; items: SwapIntent[] }>({ uid: "", items: [] });
-const [pendingIntents, setPendingIntents] = useState<SwapIntent[]>([]);
-const [sessionReady, setSessionReady] = useState(false);
-
 const [selectedFile, setSelectedFile] = useState<File | null>(null);
 const [fileUrl, setFileUrl] = useState("");
 const [filePreview, setFilePreview] = useState("");
@@ -135,7 +129,6 @@ const hasEnoughCredits =
 
 const canGenerate =
     !!user &&
-    sessionReady &&
     !loadingFile &&
     !loadingFace &&
     !!fileUrl &&
@@ -164,7 +157,6 @@ const generateBlockedMessage =
                     : "";
 
 useEffect(() => {
-    setSessionReady(false);
     setSelectedFile(null);
     setSelectedFace(null);
     setFileUrl("");
@@ -173,27 +165,7 @@ useEffect(() => {
     setPrivateImageUrl("");
     setGenerationError("");
     setCredits(0);
-    intentsRef.current = { uid: user?.uid ?? "", items: [] };
-    setPendingIntents([]);
-    if (!user) return;
-    try {
-        const items = loadIntents(sessionStorage, user.uid);
-        intentsRef.current = { uid: user.uid, items };
-        setPendingIntents(items.filter(item => !item.saved));
-        setSessionReady(true);
-    } catch {
-        setGenerationError("Não foi possível ler as operações desta sessão. Novos envios foram bloqueados para evitar duplicidade.");
-    }
 }, [user?.uid]);
-
-function rememberIntent(intent: SwapIntent) {
-    if (!user || auth.currentUser?.uid !== user.uid || intentsRef.current.uid !== user.uid) {
-        throw new FaceSwapFlowError("A sessão mudou. Entre na conta original para recuperar a operação.");
-    }
-    const items = storeIntent(sessionStorage, user.uid, intentsRef.current.items, intent);
-    intentsRef.current = { uid: user.uid, items };
-    setPendingIntents(items.filter(item => !item.saved));
-}
 
 useEffect(() => {
 
@@ -271,78 +243,64 @@ function getVideoDuration(
     });
 }
 
-async function handleGenerateSwap(recovery?: SwapIntent) {
+async function handleGenerateSwap() {
     if (generationInFlight.current) return;
-    if (!recovery && activeResult) {
+    if (activeResult) {
         const displayUrl = activeResult.kind === "image" ? privateImageUrl : "";
         if (displayUrl) window.open(displayUrl, "_blank", "noopener,noreferrer");
         return;
     }
-    if (!user || auth.currentUser?.uid !== user.uid || !sessionReady || (!recovery && !canGenerate)) return;
+    if (!user || auth.currentUser?.uid !== user.uid || !canGenerate) return;
     generationInFlight.current = true;
     setIsGenerating(true);
     setGenerationError("");
     let savingResult = false;
     let savedReference: string | undefined;
     try {
-        const intent = { ...(recovery ?? selectIntent(intentsRef.current.items, {
+        const intent = createIntent({
             original: fileUrl, target: faceUrl,
             mediaType: isVideo ? "video" : isGif ? "gif" : "image",
             duration: isVideo ? videoDuration : null,
-        })) };
-        rememberIntent(intent);
-        const taskId = await recoverSwapTask(intent, recovery ? undefined : fileUrl, rememberIntent, {
-            createMaterial, getMaterial, createSwapTask,
+        });
+        const requireCurrentSession = () => {
+            if (auth.currentUser?.uid !== user.uid) throw new FaceSwapFlowError("A sessão mudou.");
+        };
+        const taskId = await startSwapTask(intent, fileUrl, {
+            createMaterial: url => { requireCurrentSession(); return createMaterial(url); },
+            getMaterial,
+            createSwapTask: (...args) => { requireCurrentSession(); return createSwapTask(...args); },
         });
         const completed = await waitForFaceSwap(() => getSwapTask(taskId), "taskStatus", "o processamento do Face Swap");
         const result = await getSwapResult(taskId);
         const url = requireResultUrl(result?.file_url);
-        if (!pageMounted.current || auth.currentUser !== user) throw new FaceSwapFlowError("A sessão mudou. Recupere a operação na conta original.");
+        if (!pageMounted.current || auth.currentUser !== user) throw new FaceSwapFlowError("A sessão mudou.");
         const kind = completed.videoUrl === url ? "video"
             : Array.isArray(completed.imageUrls) && completed.imageUrls.includes(url) ? "image" : "unknown";
-        const previousResult = activeResult?.taskId === taskId ? activeResult : null;
-        const existingVideo = previousResult?.libraryItemId && previousResult.reference
-            ? { id: previousResult.libraryItemId, reference: previousResult.reference }
-            : kind !== "image" ? await findFaceSwapVideo(user.uid, taskId) : null;
-        if (!pageMounted.current || auth.currentUser !== user) return;
-        if (existingVideo) {
-            setPrivateImageUrl("");
-            setPrivateResult({ owner: user, taskId, kind: "video", reference: existingVideo.reference, libraryItemId: existingVideo.id });
-            if (!intent.saved) { intent.saved = true; rememberIntent(intent); }
-            return;
-        }
-        const previousReference = previousResult?.reference;
         setPrivateImageUrl("");
-        setPrivateResult({ owner: user, taskId, kind, reference: previousReference });
-        if (!intent.saved) {
-            savingResult = true;
-            const saved = previousReference && activeResult && activeResult.kind !== "unknown" && (kind === "unknown" || kind === activeResult.kind)
-                ? { reference: previousReference, mediaType: activeResult.kind }
-                : await saveFaceSwapResult(url, user.uid, kind);
-            savedReference = saved.reference;
+        setPrivateResult({ owner: user, taskId, kind });
+        savingResult = true;
+        const saved = await saveFaceSwapResult(url, user.uid, kind);
+        savedReference = saved.reference;
+        if (pageMounted.current && auth.currentUser === user) {
+            setPrivateResult({ owner: user, taskId, kind: saved.mediaType, reference: saved.reference });
+        }
+        if (saved.mediaType === "video") {
+            const libraryItemId = await createLibraryVideo(user.uid, saved.reference, taskId, "face-swap");
             if (pageMounted.current && auth.currentUser === user) {
-                setPrivateResult({ owner: user, taskId, kind: saved.mediaType, reference: saved.reference });
+                setPrivateResult({ owner: user, taskId, kind: "video", reference: saved.reference, libraryItemId });
             }
-            if (saved.mediaType === "video") {
-                const libraryItemId = await createLibraryVideo(user.uid, saved.reference, taskId, "face-swap");
-                if (pageMounted.current && auth.currentUser === user) {
-                    setPrivateResult({ owner: user, taskId, kind: "video", reference: saved.reference, libraryItemId });
-                }
-            } else {
-                await createLibraryImage(user.uid, saved.reference, "face-swap");
-            }
-            intent.saved = true;
-            rememberIntent(intent);
+        } else {
+            await createLibraryImage(user.uid, saved.reference, "face-swap");
         }
     } catch (error) {
         if (pageMounted.current && auth.currentUser === user) setGenerationError(
             savingResult
                 ? savedReference
                     ? "O Face Swap foi concluído e salvo, mas não foi possível confirmar seu registro na biblioteca. A referência foi preservada; nenhuma nova tarefa foi criada."
-                    : "O Face Swap foi concluído, mas não foi possível salvar o resultado na biblioteca. Use a recuperação manual da operação; nenhuma nova tarefa foi criada automaticamente."
+                    : "O Face Swap foi concluído, mas não foi possível salvar o resultado na biblioteca. Nenhuma nova tarefa foi criada automaticamente."
                 : error instanceof FaceSwapFlowError
                     ? error.message
-                    : swapOperationError(error) ?? `${getGenerationErrorMessage(error, "Não foi possível confirmar o Face Swap.")} A operação foi preservada para recuperação manual; não houve reenvio automático.`,
+                    : swapOperationError(error) ?? `${getGenerationErrorMessage(error, "Não foi possível confirmar o Face Swap.")} Não houve reenvio automático.`,
         );
     } finally {
         generationInFlight.current = false;
@@ -450,7 +408,7 @@ async function handleGenerateSwap(recovery?: SwapIntent) {
                                                     ? "Vídeo concluído. A reprodução privada depende da confirmação do registro na biblioteca."
                                                     : activeResult.reference
                                                         ? "Resultado salvo; não foi possível confirmar seu tipo para exibição."
-                                                        : "Resultado concluído. Se já foi salvo, consulte a biblioteca; caso contrário, use a recuperação manual da operação."}
+                                                        : "Resultado concluído. Consulte a biblioteca para verificar se foi salvo."}
                                                 {" "}<Link to="/biblioteca">Abrir biblioteca</Link>
                                             </p>
                                         )}
@@ -470,6 +428,57 @@ async function handleGenerateSwap(recovery?: SwapIntent) {
                                     fileUrl ? "preview" : ""
                                 }`}
                             >
+
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*,video/*"
+                                    style={{ display: "none" }}
+                                   onChange={async (event) => {
+
+                                        const file = event.target.files?.[0];
+                                        event.currentTarget.value = "";
+
+                                        if (!file) return;
+
+                                        if (!canUpload()) return;
+
+                                        setLoadingFile(true);
+
+                                        try{
+
+                                            setSelectedFile(file);
+
+                                            if (file.type.startsWith("video/")) {
+
+                                                const duration =
+                                                    await getVideoDuration(file);
+
+                                                setVideoDuration(duration);
+
+                                            } else {
+
+                                                setVideoDuration(0);
+
+                                            }
+
+                                            if (!canUpload()) return;
+                                            const url = await uploadScopedFile(
+                                                file,
+                                                "face-swap",
+                                                user?.uid
+                                            );
+
+                                            setFileUrl(url);
+
+                                        }finally{
+
+                                            setLoadingFile(false);
+
+                                        }
+
+                                    }}
+                                />
 
                                 {
                                     loadingFile ? (
@@ -525,55 +534,7 @@ async function handleGenerateSwap(recovery?: SwapIntent) {
                                             }
 
                                             <>
-                                                <input
-                                                    ref={fileInputRef}
-                                                    type="file"
-                                                    accept="image/*,video/*"
-                                                    style={{ display: "none" }}
-                                                   onChange={async (event) => {
 
-                                                        const file = event.target.files?.[0];
-
-                                                        if (!file) return;
-
-                                                        if (!canUpload()) return;
-
-                                                        setLoadingFile(true);
-
-                                                        try{
-
-                                                            setSelectedFile(file);
-
-                                                            if (file.type.startsWith("video/")) {
-
-                                                                const duration =
-                                                                    await getVideoDuration(file);
-
-                                                                setVideoDuration(duration);
-
-                                                            } else {
-
-                                                                setVideoDuration(0);
-
-                                                            }
-
-                                                            if (!canUpload()) return;
-                                                            const url = await uploadScopedFile(
-                                                                file,
-                                                                "face-swap",
-                                                                user?.uid
-                                                            );
-
-                                                            setFileUrl(url);
-
-                                                        }finally{
-
-                                                            setLoadingFile(false);
-
-                                                        }
-
-                                                    }}
-                                                />
 
                                                 <button
                                                     className="face-swap-upload-button"
@@ -794,18 +755,6 @@ async function handleGenerateSwap(recovery?: SwapIntent) {
                                 }
 
                             </button> 
-
-                            {sessionReady && pendingIntents.map(intent => (
-                                <button
-                                    key={intent.key}
-                                    type="button"
-                                    className="face-swap-create-button"
-                                    disabled={isGenerating}
-                                    onClick={() => handleGenerateSwap(intent)}
-                                >
-                                    Recuperar operação {intent.key.slice(0, 8)}
-                                </button>
-                            ))}
 
                             {generationError && (
                                 <p role="alert" className="face-swap-create-blocked-message">

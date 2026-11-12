@@ -195,4 +195,13 @@ class VideoAccessTests(unittest.TestCase):
         self.ref.update.assert_not_called()
 
 
+    def test_forged_library_task_id_never_authorizes_another_storage_owner(self):
+        self.item.update({'taskId': 'bob-task', 'mediaType': 'video'})
+        # A forged task ID does not expand access beyond Alice's actual copy.
+        self.assertEqual(self.request().status_code, 200)
+        self.item['videoUrl'] = self.url('users/bob/videos/output.mp4')
+        self.blob.generate_signed_url.reset_mock()
+        self.assertEqual(self.request().status_code, 403)
+        self.blob.generate_signed_url.assert_not_called()
+
 if __name__ == '__main__': unittest.main()
