@@ -1,19 +1,23 @@
-import { useEffect } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
+import { scrollPageToTop } from "../utils/scrollLock";
 
 function ScrollToTop() {
+    const { pathname, hash } = useLocation();
+    const previousPath = useRef<string | null>(null);
 
-    const { pathname } = useLocation();
+    useLayoutEffect(() => {
+        const previous = window.history.scrollRestoration;
+        window.history.scrollRestoration = "manual";
+        return () => { window.history.scrollRestoration = previous; };
+    }, []);
 
-    useEffect(() => {
-
-        window.scrollTo({
-            top: 0,
-            left: 0,
-            behavior: "auto",
-        });
-
-    }, [pathname]);
+    useLayoutEffect(() => {
+        if (previousPath.current === pathname) return;
+        previousPath.current = pathname;
+        // Leave fragment navigation to the existing anchor behavior.
+        if (!hash) scrollPageToTop();
+    }, [pathname, hash]);
 
     return null;
 }

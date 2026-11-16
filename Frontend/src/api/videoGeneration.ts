@@ -64,14 +64,12 @@ export async function createReferenceToVideo(
 
 export async function createTextToVideo(
     prompt: string,
-    referenceImageUrl: string,
     duration: number
 ) {
     const response = await api.post(
         "/video-generation/text-to-video",
         {
             prompt,
-            reference_image_url: referenceImageUrl,
             duration,
         }
     );

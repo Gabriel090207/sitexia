@@ -7,8 +7,15 @@ import { webcrypto } from 'node:crypto';
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 const compile = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.CommonJS } }).outputText;
 const module = { exports: {} };
-vm.runInNewContext(compile(read('../src/pages/FaceSwap/faceSwapPolling.ts')), { module, exports: module.exports, URL, setTimeout, clearTimeout });
+vm.runInNewContext(compile(read('../src/pages/FaceSwap/faceSwapPolling.ts')), { module, exports: module.exports, URL, setTimeout, clearTimeout, AbortController });
 const helpers = module.exports;
+const resultModule = { exports: {} };
+vm.runInNewContext(compile(read('../src/pages/FaceSwap/faceSwapResult.ts')), {
+    module: resultModule, exports: resultModule.exports, AbortController, setTimeout, clearTimeout,
+    require: () => helpers,
+});
+const { resolveFaceSwapResult } = resultModule.exports;
+
 const intentModule = { exports: {} };
 vm.runInNewContext(compile(read('../src/pages/FaceSwap/faceSwapIntent.ts')), {
     module: intentModule, exports: intentModule.exports, URL, crypto: webcrypto,
@@ -51,11 +58,11 @@ assert.ok(handler);
 function prepare(overrides = {}) {
     const calls = [], errors = [], loading = [], results = [];
     const scope = {
-        ...helpers, ...intents, generationInFlight: { current: false }, activeResult: null, privateImageUrl: "", pageMounted: { current: true }, resultUrl: '', canGenerate: true,
+        ...helpers, ...intents, resolveFaceSwapResult, AbortController, pollingController: { current: null }, generationInFlight: { current: false }, activeResult: null, privateImageUrl: "", pageMounted: { current: true }, resultUrl: '', canGenerate: true,
         auth: { currentUser: { uid: 'user' } },
         startSwapTask: (intent, original, services) => intents.startSwapTask(intent, original,
             { ...services, wait: (fetch, field, label) => waitForFaceSwap(fetch, field, label, 200, 0) }),
-        user: { uid: 'user' }, fileUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/face-swap%2Fuser%2Foriginal.png?token=secret', faceUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/face-swap-faces%2Fuser%2Fface.png?token=secret', isVideo: false, isGif: false, videoDuration: 0,
+        user: { uid: 'user' }, selectedFile: {type:'image/png'}, fileUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/face-swap%2Fuser%2Foriginal.png?token=secret', faceUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/face-swap-faces%2Fuser%2Fface.png?token=secret', isVideo: false, isGif: false, videoDuration: 0,
         setIsGenerating: value => loading.push(value), setGenerationError: value => errors.push(value),
         setPrivateResult: value => { scope.presentation = value; }, setPrivateImageUrl: () => {},
         setResultUrl: value => results.push(value), window: { open() {} },
@@ -69,7 +76,7 @@ function prepare(overrides = {}) {
         createLibraryImage: async (...args) => { calls.push(['library', ...args]); },
         createLibraryVideo: async (...args) => { calls.push(['library-video', ...args]); return 'actual-library-id'; },
         findFaceSwapVideo: async () => null,
-        waitForFaceSwap: (fetch, field, label) => waitForFaceSwap(fetch, field, label, 200, 0),
+        waitForFaceSwap: (fetch, field, label, _timeout, _interval, options) => waitForFaceSwap(fetch, field, label, 200, 0, options),
         ...overrides,
     };
     scope.auth.currentUser = scope.user;
@@ -235,7 +242,7 @@ test('Face Swap reuses native private player and removes provider playback fallb
 });
 
 for (const [mediaType, duration] of [['image', null], ['gif', null], ['video', 16]]) {
-    test(`new ${mediaType} generations use current files and distinct idempotency keys`, async () => {
+    test(`internal ${mediaType} submission arguments preserve current files and distinct idempotency keys`, async () => {
         const submitted = [], originals = [];
         const state = prepare({ isVideo: mediaType === 'video', isGif: mediaType === 'gif', videoDuration: duration,
             createMaterial: async url => { originals.push(url); return {materialId:'123'}; },
@@ -292,7 +299,7 @@ collectFileInputs(ast);
 test('one file input stays outside selection/loading/preview branches and both buttons target it', () => {
     assert.equal(fileInputs.length, 1);
     const input = fileInputs[0];
-    assert.equal(attribute(input, 'accept').initializer.text, 'image/*,video/*');
+    assert.equal(attribute(input, 'accept').initializer.text, 'image/*');
     assert.ok(ts.isJsxElement(input.parent));
     assert.match(input.parent.openingElement.getText(ast), /face-swap-upload-dropzone/);
     const branches = input.parent.children.find(child => ts.isJsxExpression(child)
@@ -317,6 +324,7 @@ function uploadHandler(authorized = true) {
     const calls = [];
     const scope = {
         canUpload: () => authorized, user: {uid:'user'},
+        setGenerationError: value => calls.push(['error',value]),
         setLoadingFile: value => calls.push(['loading',value]),
         setSelectedFile: file => calls.push(['selected',file]),
         getVideoDuration: async () => 16,
@@ -328,7 +336,7 @@ function uploadHandler(authorized = true) {
     vm.runInNewContext(compile(`globalThis.change = ${handler};`), scope);
     return {change:scope.change,calls};
 }
-for (const type of ['image/png','image/gif','video/mp4']) test(`file selection and replacement preserve upload handling: ${type}`, async () => {
+for (const type of ['image/png','image/gif','image/jpeg','image/webp']) test(`file selection and replacement preserve upload handling: ${type}`, async () => {
     const {change,calls} = uploadHandler();
     const file = {type};
     const input = {files:[file],value:'selected-file'};
@@ -352,4 +360,100 @@ test('unauthorized file selection cannot start an upload or replace application 
     const input = {files:[{type:'image/png'}],value:'file'};
     await change({target:input,currentTarget:input});
     assert.deepEqual(calls,[]);
+});
+
+for (const kind of ['image', 'video']) test(`handler: transient task GET resumes ${kind} result without another POST or duplicate save`, async () => {
+    let gets = 0;
+    const ids = [];
+    const url = 'https://example.com/result';
+    const state = prepare({
+        isVideo: kind === 'video', videoDuration: kind === 'video' ? 5 : 0,
+        waitForFaceSwap: (fetch, field, label, _timeout, _interval, options) => waitForFaceSwap(fetch, field, label, 20000, 0, options),
+        getSwapTask: async id => {
+            ids.push(id);
+            if (++gets === 1) throw { response: { status: 503 } };
+            return { taskStatus: gets === 2 ? 'RUNNING' : 'SUCCEEDED', ...(kind === 'video' ? { videoUrl: url } : { imageUrls: [url] }) };
+        },
+        getSwapResult: async () => ({ file_url: url }),
+    });
+    await state.scope.run();
+    assert.deepEqual(ids, ['789', '789', '789']);
+    assert.equal(state.calls.filter(call => call === 'task').length, 1);
+    assert.equal(state.calls.filter(call => call === 'upload').length, 1);
+    assert.equal(state.calls.filter(call => Array.isArray(call) && call[0].startsWith('library')).length, 1);
+    assert.equal(state.scope.presentation.kind, kind);
+    assert.equal(state.errors.at(-1), '');
+});
+
+for (const kind of ['image', 'video']) test(`handler: result recovery for ${kind} never recreates or duplicates upload/library writes`, async () => {
+    let requests = 0;
+    const ids = [];
+    const failures = kind === 'image' ? 1 : 2;
+    const state = prepare({
+        isVideo: kind === 'video', videoDuration: kind === 'video' ? 5 : 0,
+        getSwapTask: async () => ({ taskStatus: 'SUCCEEDED', ...(kind === 'image' ? {imageUrls:['https://example.com/result.png']} : {videoUrl:'https://example.com/result.png'}) }),
+        getSwapResult: async (id, signal) => {
+            ids.push(id);
+            assert.equal(signal.aborted, false);
+            if (++requests <= failures) throw {response:{status:502,data:{detail:'Não foi possível consultar o resultado na Deep.'}}};
+            return {file_url:'https://example.com/result.png', task_id:id};
+        },
+    });
+    await state.scope.run();
+    assert.equal(requests, failures + 1);
+    assert.ok(ids.every(id => id === '789'));
+    assert.equal(state.calls.filter(call => call === 'task').length, 1);
+    assert.equal(state.calls.filter(call => call === 'material').length, 1);
+    assert.equal(state.calls.filter(call => call === 'upload').length, 1);
+    assert.equal(state.calls.filter(call => Array.isArray(call) && call[0].startsWith('library')).length, 1);
+    assert.equal(state.scope.presentation.kind, kind);
+    assert.equal(state.errors.at(-1), '');
+});
+for (const failure of ['saveFaceSwapResult', 'createLibraryImage']) test(`handler: ${failure} error never restarts result resolution or saving`, async () => {
+    let requests = 0, writes = 0;
+    const state = prepare({
+        getSwapResult: async () => { requests++; return {file_url:'https://example.com/result.png'}; },
+        [failure]: async () => { writes++; throw new Error('storage error'); },
+    });
+    await state.scope.run();
+    assert.equal(requests, 1); assert.equal(writes, 1);
+    assert.equal(state.calls.filter(call => call === 'task').length, 1);
+});
+test('result API adapter retains task ID and forwards cancellation signal', async () => {
+    const adapter = {exports:{}};
+    let args;
+    vm.runInNewContext(compile(read('../src/api/swap.ts')), {
+        module:adapter, exports:adapter.exports,
+        require:()=>({__esModule:true,default:{post:async(...values)=>{args=values;return {data:{file_url:'https://example.com/result.png'}};}}}),
+    });
+    const controller = new AbortController();
+    await adapter.exports.getSwapResult('789',controller.signal);
+    assert.equal(args[0],'/swap/result');
+    assert.equal(args[1].task_id,'789');
+    assert.equal(Object.keys(args[1]).length,1);
+    assert.equal(args[2].signal,controller.signal);
+});
+
+
+for (const type of ['video/mp4','video/webm','application/octet-stream','']) test(`image-only page rejects unsupported file before upload: ${type}`, async () => {
+    const {change,calls}=uploadHandler();
+    const input={files:[{type}],value:'file'};
+    await change({target:input,currentTarget:input});
+    assert.equal(input.value,'');
+    assert.equal(calls.length,1);
+    assert.equal(calls[0][0],'error');
+    assert.match(calls[0][1],/Selecione uma imagem/);
+});
+test('stale video selection cannot create a Face Swap even with a stale enabled flag',async()=>{
+    const state=prepare({selectedFile:{type:'video/mp4'},isVideo:true,videoDuration:16,canGenerate:true});
+    await state.scope.run();
+    assert.equal(state.calls.length,0);
+    assert.equal(state.loading.length,0);
+});
+test('image-only selection preserves internal video support and the mobile spacing styles',()=>{
+    assert.doesNotMatch(source,/accept="image\/\*,video\/\*"|imagem ou vídeo/);
+    assert.ok(source.includes('privateResult.kind !== "video"'));
+    assert.ok(source.includes('if (selectedFile && !selectedFile.type.startsWith("image/"))'));
+    assert.ok(source.includes('const [selectedFile, setSelectedFile] = useState<File | null>(null)'));
+    assert.ok(source.includes('createLibraryVideo'));
 });

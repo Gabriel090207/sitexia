@@ -27,10 +27,10 @@ class FinalizationTests(unittest.IsolatedAsyncioTestCase):
         db.collection.side_effect = lambda name: Mock(document=lambda identifier: Reference(name, identifier))
         original = operations._finalize_confirmed_task
 
-        def finalize(_transaction, *args):
+        def finalize(_transaction, *args, **kwargs):
             with self.lock:
                 state = deepcopy(self.state)
-                result = original(fixtures.Transaction(state), *args)
+                result = original(fixtures.Transaction(state), *args, **kwargs)
                 if self.fail_commit:
                     raise RuntimeError("simulated commit failure")
                 self.state = state

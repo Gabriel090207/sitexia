@@ -21,15 +21,15 @@ def _duration(value: Any) -> int | float:
 
 
 def calculate_face_swap_price(material: Mapping[str, Any]) -> int | float:
-    """IMAGE costs 0.1; VIDEO costs ceil(seconds / 15), at least one.
+    """PHOTO/IMAGE cost 0.1; VIDEO costs ceil(seconds / 15), at least one.
 
-    IMAGE may omit duration or report zero; a positive video duration on an
+    PHOTO/IMAGE may omit duration or report zero; a positive video duration on an
     image is inconsistent. GIF has no supported provider classification here.
     """
     if not isinstance(material, Mapping):
         raise InvalidFaceSwapMetadata("Metadados do material inválidos.")
     material_type = material.get("materialType")
-    if material_type == "IMAGE":
+    if material_type in ("IMAGE", "PHOTO"):
         duration = material.get("duration")
         if duration is not None and _duration(duration) != 0:
             raise InvalidFaceSwapMetadata("Duração incompatível com material de imagem.")

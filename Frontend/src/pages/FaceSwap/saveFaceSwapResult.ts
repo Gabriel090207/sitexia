@@ -1,4 +1,5 @@
 import { uploadFile } from "../../services/storage";
+import { prepareVideoFile } from "../VideoGeneration/prepareVideoFile";
 
 export type FaceSwapMediaType = "image" | "video";
 const formats: Record<string, { mediaType: FaceSwapMediaType; extension: string }> = {
@@ -25,8 +26,23 @@ export async function saveFaceSwapResult(url: string, uid: string, expected: Fac
     const response = await fetch(url);
     if (!response.ok) throw new Error("Não foi possível baixar o resultado concluído.");
     const blob = await response.blob();
-    const mime = blob.type.split(";", 1)[0]!.trim().toLowerCase();
+    let mime = blob.type.split(";", 1)[0]!.trim().toLowerCase();
+    if ((mime === "application/octet-stream" || mime === "") && expected !== "video" && blob.size >= 5) {
+        // Identify JPEG by its binary markers, never by the provider URL suffix.
+        const start = new Uint8Array(await blob.slice(0, 3).arrayBuffer());
+        const end = new Uint8Array(await blob.slice(-2).arrayBuffer());
+        if (start[0] === 0xff && start[1] === 0xd8 && start[2] === 0xff
+            && end[0] === 0xff && end[1] === 0xd9) {
+            mime = "image/jpeg";
+        }
+    }
     const format = formats[mime];
+    if (expected !== "image" && (format?.mediaType === "video"
+        || mime === "application/octet-stream" || mime === "")) {
+        const file = await prepareVideoFile(blob);
+        const reference = await uploadFile(file, `users/${uid}/swaps`);
+        return { reference, mediaType: "video" as const };
+    }
     if (!format || blob.size === 0 || (expected !== "unknown" && format.mediaType !== expected)) {
         throw new Error("O conteúdo recebido não corresponde a um resultado de mídia válido.");
     }

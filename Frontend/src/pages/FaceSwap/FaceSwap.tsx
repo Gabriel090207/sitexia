@@ -2,6 +2,7 @@ import PrivateLibraryVideo from "../Library/PrivateLibraryVideo";
 import PrivateFaceSwapImage from "./PrivateFaceSwapImage";
 import { createIntent, startSwapTask, swapOperationError } from "./faceSwapIntent";
 import { FaceSwapFlowError, requireResultUrl, waitForFaceSwap } from "./faceSwapPolling";
+import { resolveFaceSwapResult } from "./faceSwapResult";
 import { getGenerationErrorMessage } from "../../utils/generationErrors";
 import { formatCredits } from "../../utils/formatCredits";
 import "./FaceSwap.css";
@@ -25,6 +26,7 @@ import { uploadScopedFile } from "../../services/scopedUploads";
 
 import { useAuth } from "../../contexts/AuthContext";
 import auth from "../../firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { allowAuthenticatedUpload } from "../../utils/uploadAuthorization";
 
 import {
@@ -60,7 +62,7 @@ const [selectedFace, setSelectedFace] = useState<File | null>(null);
 const [facePreview, setFacePreview] = useState("");
 
 useEffect(() => {
-    if (!selectedFile) { setFilePreview(""); return; }
+    if (!selectedFile?.type.startsWith("image/")) { setFilePreview(""); return; }
     const preview = URL.createObjectURL(selectedFile);
     setFilePreview(preview);
     return () => URL.revokeObjectURL(preview);
@@ -85,6 +87,15 @@ const isGif =
 const isImage =
     !!selectedFile && !isVideo && !isGif;
 
+// Clear an obsolete video selection (for example after a development reload).
+useEffect(() => {
+    if (selectedFile && !selectedFile.type.startsWith("image/")) {
+        setSelectedFile(null);
+        setFileUrl("");
+        setVideoDuration(0);
+    }
+}, [selectedFile]);
+
 const generationCost =
     isVideo
         ? Math.max(
@@ -108,8 +119,15 @@ const [privateResult, setPrivateResult] = useState<{
     owner: NonNullable<typeof user>; taskId: string; kind: "image" | "video" | "unknown"; reference?: string; libraryItemId?: string;
 } | null>(null);
 const [privateImageUrl, setPrivateImageUrl] = useState("");
-const activeResult = privateResult?.owner === user && auth.currentUser === user ? privateResult : null;
+const activeResult = privateResult?.owner === user && auth.currentUser === user && privateResult.kind !== "video" ? privateResult : null;
 const pageMounted = useRef(false);
+const pollingController = useRef<AbortController | null>(null);
+useEffect(() => {
+    const stopAuth = onAuthStateChanged(auth, current => {
+        if (current !== user) pollingController.current?.abort();
+    });
+    return () => { stopAuth(); pollingController.current?.abort(); };
+}, [user]);
 useEffect(() => {
     pageMounted.current = true;
     return () => { pageMounted.current = false; };
@@ -129,6 +147,7 @@ const hasEnoughCredits =
 
 const canGenerate =
     !!user &&
+    !!selectedFile?.type.startsWith("image/") &&
     !loadingFile &&
     !loadingFace &&
     !!fileUrl &&
@@ -147,7 +166,7 @@ const generateBlockedMessage =
     !user
         ? "Faça login para criar um Face Swap."
         : !fileUrl
-            ? "Selecione uma imagem ou vídeo para continuar."
+            ? "Selecione uma imagem para continuar."
             : !faceUrl
                 ? "Adicione um rosto para continuar."
                 : generationCost > credits
@@ -251,9 +270,12 @@ async function handleGenerateSwap() {
         return;
     }
     if (!user || auth.currentUser?.uid !== user.uid || !canGenerate) return;
+    if (!selectedFile?.type.startsWith("image/")) return;
     generationInFlight.current = true;
     setIsGenerating(true);
     setGenerationError("");
+    const controller = new AbortController();
+    pollingController.current = controller;
     let savingResult = false;
     let savedReference: string | undefined;
     try {
@@ -263,15 +285,23 @@ async function handleGenerateSwap() {
             duration: isVideo ? videoDuration : null,
         });
         const requireCurrentSession = () => {
-            if (auth.currentUser?.uid !== user.uid) throw new FaceSwapFlowError("A sessão mudou.");
+            if (controller.signal.aborted || !pageMounted.current || auth.currentUser !== user) throw new FaceSwapFlowError("A sessão mudou.");
         };
         const taskId = await startSwapTask(intent, fileUrl, {
             createMaterial: url => { requireCurrentSession(); return createMaterial(url); },
             getMaterial,
             createSwapTask: (...args) => { requireCurrentSession(); return createSwapTask(...args); },
         });
-        const completed = await waitForFaceSwap(() => getSwapTask(taskId), "taskStatus", "o processamento do Face Swap");
-        const result = await getSwapResult(taskId);
+        requireCurrentSession();
+        const completed = await waitForFaceSwap(signal => getSwapTask(taskId, signal), "taskStatus", "o processamento do Face Swap", undefined, undefined, {
+            signal: controller.signal,
+            isCurrent: () => pageMounted.current && auth.currentUser === user,
+        });
+        requireCurrentSession();
+        const result = await resolveFaceSwapResult(taskId, getSwapResult, {
+            signal: controller.signal,
+            isCurrent: () => pageMounted.current && auth.currentUser === user,
+        });
         const url = requireResultUrl(result?.file_url);
         if (!pageMounted.current || auth.currentUser !== user) throw new FaceSwapFlowError("A sessão mudou.");
         const kind = completed.videoUrl === url ? "video"
@@ -303,6 +333,8 @@ async function handleGenerateSwap() {
                     : swapOperationError(error) ?? `${getGenerationErrorMessage(error, "Não foi possível confirmar o Face Swap.")} Não houve reenvio automático.`,
         );
     } finally {
+        controller.abort();
+        if (pollingController.current === controller) pollingController.current = null;
         generationInFlight.current = false;
         if (pageMounted.current) setIsGenerating(false);
     }
@@ -331,7 +363,7 @@ async function handleGenerateSwap() {
 
                     <p className="face-swap-description">
 
-                        Faça upload de uma imagem ou vídeo, detecte rostos automaticamente e crie trocas de rosto realistas com inteligência artificial em poucos segundos.
+                        Faça upload de uma imagem, detecte rostos automaticamente e crie trocas de rosto realistas com inteligência artificial em poucos segundos.
 
                     </p>
 
@@ -432,7 +464,7 @@ async function handleGenerateSwap() {
                                 <input
                                     ref={fileInputRef}
                                     type="file"
-                                    accept="image/*,video/*"
+                                    accept="image/*"
                                     style={{ display: "none" }}
                                     onChange={async (event) => {
 
@@ -440,6 +472,11 @@ async function handleGenerateSwap() {
                                         event.target.value = "";
 
                                         if (!file) return;
+
+                                        if (!file.type.startsWith("image/")) {
+                                            setGenerationError("Selecione uma imagem. Face Swap de vídeo está temporariamente indisponível nesta página.");
+                                            return;
+                                        }
 
                                         if (!canUpload()) return;
 
@@ -514,11 +551,11 @@ async function handleGenerateSwap() {
                                             </h2>
 
                                             <p className="face-swap-upload-description">
-                                                Arraste uma imagem ou vídeo para esta área ou clique no botão abaixo para selecionar um arquivo.
+                                                Arraste uma imagem para esta área ou clique no botão abaixo para selecionar um arquivo.
                                             </p>
 
                                             <span className="face-swap-upload-formats">
-                                                PNG • JPG • JPEG • WEBP • MP4 • MOV
+                                                PNG • JPG • JPEG • WEBP
                                             </span>
 
                                             {

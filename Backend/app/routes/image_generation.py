@@ -46,10 +46,6 @@ STYLE_CONFIG = {
         "size": "768:1152",
     },
 
-    "anime": {
-        "model": "anime-girl1.0",
-        "size": "512:768",
-    },
 
 }
 
@@ -113,17 +109,35 @@ async def create_reserved_image(user_id, quantity, prompt, model, size):
         raise HTTPException(status_code=status, detail=message) from error
 
     generation_id = generation["generationId"]
+
+    def log_failure(category, status=None):
+        # Only server-configured model/size values, never caller or provider text.
+        safe_model = model if model in {value["model"] for value in STYLE_CONFIG.values()} else "unknown"
+        safe_size = size if size in {value["size"] for value in STYLE_CONFIG.values()} else "unknown"
+        logger.warning("Image creation operation=image_creation category=%s http_status=%s model=%s size=%s quantity=%s",
+                       category, status, safe_model, safe_size, quantity)
+
     try:
         task = await create_text_to_image_task(prompt, model, size, quantity)
     except httpx.HTTPStatusError as error:
         # 408 e 5xx não comprovam que o provedor deixou de criar a tarefa.
         if 400 <= error.response.status_code < 500 and error.response.status_code != 408:
-            release_reserved_generation(generation_id)
-        else:
-            logger.warning("Criação ambígua; reserva mantida: generationId=%s", generation_id)
-        raise
-    except (httpx.RequestError, json.JSONDecodeError, asyncio.CancelledError):
-        logger.warning("Criação ambígua; reserva mantida: generationId=%s", generation_id)
+            try:
+                release_reserved_generation(generation_id)
+            except Exception:
+                log_failure("release_unconfirmed", error.response.status_code)
+                raise HTTPException(503, "O provedor não aceitou a solicitação, mas não foi possível confirmar a liberação da reserva. Não inicie outra geração para substituir esta tentativa.") from None
+            log_failure("provider_rejection", error.response.status_code)
+            raise HTTPException(502, "O provedor não aceitou a solicitação de geração de imagem.") from None
+        log_failure("creation_unconfirmed", error.response.status_code)
+        raise HTTPException(502, "Não foi possível confirmar a criação da imagem. A tarefa ou reserva pode existir. Não inicie outra geração para substituir esta tentativa.") from None
+    except (httpx.RequestError, json.JSONDecodeError) as error:
+        category = "timeout" if isinstance(error, httpx.TimeoutException) else (
+            "network" if isinstance(error, httpx.RequestError) else "invalid_response")
+        log_failure(category)
+        raise HTTPException(502, "Não foi possível confirmar a criação da imagem. A tarefa ou reserva pode existir. Não inicie outra geração para substituir esta tentativa.") from None
+    except asyncio.CancelledError:
+        log_failure("cancelled_unconfirmed")
         raise
     except (ValueError, HTTPException):
         # Validações locais definitivas dos helpers.
@@ -175,6 +189,9 @@ async def create_text_to_image(
         Depends(get_current_user),
     ],
 ):
+
+    if request.style == "anime":
+        raise HTTPException(410, "A geração de imagens Anime está indisponível.")
 
     prompt = request.prompt.strip()
 

@@ -211,33 +211,15 @@ async def get_task(task_id: str):
     )
 
 
-async def create_text_to_video_task(
-    prompt: str,
-    reference_image_url: str | None = None,
-    duration: int = 5
-):
-
+async def create_text_to_video_task(prompt: str, duration: int = 5):
     payload = {
-        "model": "deepvid2.0-t2v",
+        "model": "deepecho2.0-t2v",
         "prompt": prompt,
         "duration": duration,
-        "outputAudio": True,
-        "promptEnhance": True
+        "resolution": "720p",
     }
+    return await post("/openapi/v1/aigc/video-generation/tasks", payload)
 
-    if reference_image_url:
-
-        payload["media"] = [
-            {
-                "type": "referenceImage",
-                "url": reference_image_url
-            }
-        ]
-
-    return await post(
-        "/openapi/v1/aigc/video-generation/tasks",
-        payload
-    )
 
 
 async def get_video_task(
@@ -285,13 +267,12 @@ async def create_video_extend_task(
 ):
 
     payload = {
-        "model": "deepvid2.0-video-extend",
+        "model": "deepvid3.0-video-extend",
         "prompt": prompt,
         "duration": duration,
         "sourceTaskId": int(source_task_id),
         "outputAudio": True,
         "partialAudio": False,
-        "promptEnhance": True
     }
 
     return await post(
@@ -307,7 +288,7 @@ async def create_reference_to_video_task(
 ):
 
     payload = {
-        "model": "deepecho1.0-r2v",
+        "model": "deepecho2.0-r2v",
         "prompt": prompt,
         "duration": duration,
         "resolution": "720p",

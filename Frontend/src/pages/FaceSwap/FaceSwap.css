@@ -984,7 +984,9 @@
 
     .face-swap-upload-card{
 
-        margin-bottom: 14px;
+        min-height:0;
+
+        margin-bottom:20px;
 
     }
 

@@ -35,6 +35,7 @@ export function createPrivateVideoPlayback(video: HTMLVideoElement, itemId: stri
     }
     function fail(message: string) {
         pending ??= capture();
+        wanted = false;
         clearSource();
         emit({ status: "error", message });
     }
@@ -85,6 +86,8 @@ export function createPrivateVideoPlayback(video: HTMLVideoElement, itemId: stri
                 access = true;
                 video.src = parsed.href;
                 video.load();
+                // Native controls can now be used even with preload="none".
+                emit({ status: "ready" });
                 // pause/load events are asynchronous: keep the restore guard until metadata arrives.
             } catch (error) {
                 if (current() && !signal.aborted) fail(message(error));
@@ -133,6 +136,10 @@ export function createPrivateVideoPlayback(video: HTMLVideoElement, itemId: stri
         }
     });
     return {
+        async prepare() {
+            if (!current()) { emit({ status: "error", message: "Entre na conta original para assistir." }); return; }
+            if (!access || expired()) await acquire();
+        },
         async play() {
             if (!current()) { emit({ status: "error", message: "Entre na conta original para assistir." }); return; }
             wanted = true;

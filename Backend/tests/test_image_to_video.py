@@ -80,6 +80,18 @@ class ImageToVideoTests(unittest.IsolatedAsyncioTestCase):
                      "media": [{"type": "firstFrame", "url": "image"}]},
                 )
 
+    async def test_extend_payload_uses_deepvid3_contract_without_prompt_enhance(self):
+        for duration in (5, 10, 15):
+            for source in ('1', '9223372036854775807'):
+                with self.subTest(duration=duration, source=source):
+                    with patch.object(provider, "post", AsyncMock(return_value={"taskId": "123"})) as post:
+                        await provider.create_video_extend_task(source, "synthetic", duration)
+                        post.assert_awaited_once_with(
+                            "/openapi/v1/aigc/video-generation/tasks",
+                            {"model": "deepvid3.0-video-extend", "prompt": "synthetic", "duration": duration,
+                             "sourceTaskId": int(source), "outputAudio": True, "partialAudio": False},
+                        )
+
     async def test_success_reserves_same_price_and_attaches_without_charging(self):
         for duration in (5, 10, 15):
             result = await self.create(AsyncMock(return_value={"taskId": "123"}), duration=duration)
@@ -127,12 +139,12 @@ class ImageToVideoTests(unittest.IsolatedAsyncioTestCase):
         self.charge.assert_not_called()
 
     async def test_other_modes_keep_existing_http_error_behavior(self):
-        for mode in ("text-to-video", "reference-to-video", "video-extend"):
+        for mode in ("text-to-video", "reference-to-video"):
             response = httpx.Response(400, request=httpx.Request("POST", "https://provider.invalid"))
             error = httpx.HTTPStatusError("rejected", request=response.request, response=response)
             with self.assertRaises(httpx.HTTPStatusError):
                 await self.create(AsyncMock(side_effect=error), mode=mode)
-        self.assertEqual(self.release.call_count, 3)
+        self.assertEqual(self.release.call_count, 2)
 
     async def test_logs_do_not_include_media_prompt_or_response(self):
         response = httpx.Response(200, json={"taskId": "123", "secret": "response-secret"})

@@ -5,6 +5,7 @@ import {
 
 import storage from "../firebase/storage";
 import { storageReferenceAddress } from "./storageReferences";
+import { MAX_GENERATED_IMAGE_BYTES, prepareGeneratedImage } from "./prepareGeneratedImage";
 
 export async function uploadFile(
     file: File,
@@ -44,13 +45,36 @@ export async function uploadImageFromUrl(
         );
     }
 
-    const blob = await response.blob();
-
-    const contentType =
-        blob.type || "image/jpeg";
-
-    const extension =
-        contentType.split("/")[1] || "jpg";
+    const declaredSize = Number(response.headers?.get("Content-Length"));
+    if (Number.isFinite(declaredSize) && declaredSize > MAX_GENERATED_IMAGE_BYTES) {
+        throw new Error("A imagem gerada excede o limite de 32 MB.");
+    }
+    let blob: Blob;
+    const reader = response.body?.getReader();
+    if (reader) {
+        const chunks: BlobPart[] = [];
+        let size = 0;
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                size += value.byteLength;
+                if (size > MAX_GENERATED_IMAGE_BYTES) {
+                    await reader.cancel();
+                    throw new Error("A imagem gerada excede o limite de 32 MB.");
+                }
+                chunks.push(new Uint8Array(value));
+            }
+            blob = new Blob(chunks);
+        } finally {
+            reader.releaseLock();
+        }
+    } else {
+        blob = await response.blob();
+    }
+    const file = await prepareGeneratedImage(blob);
+    const contentType = file.type;
+    const extension = file.name.split(".").pop();
 
     const fileName =
         `${Date.now()}.${extension}`;
@@ -62,7 +86,7 @@ export async function uploadImageFromUrl(
 
     const snapshot = await uploadBytes(
         storageRef,
-        blob,
+        file,
         {
             contentType,
         }

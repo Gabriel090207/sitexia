@@ -18,9 +18,7 @@ import test_image_to_video as fixtures
 from app.services.video_reference import prepare_video_reference
 
 routes = fixtures.routes
-ENDPOINTS = [('image-to-video', 'image_url', 'create_image_to_video_task'),
-             ('reference-to-video', 'reference_url', 'create_reference_to_video_task'),
-             ('text-to-video', 'reference_image_url', 'create_text_to_video_task')]
+ENDPOINTS = [('image-to-video', 'image_url', 'create_image_to_video_task')]
 
 
 def image_bytes(fmt='PNG', mode='RGB', size=(240, 240), **save_options):
@@ -96,11 +94,14 @@ class VideoReferenceTests(unittest.TestCase):
             self.assertEqual(self.post(endpoint, field, self.url().split("?")[0]).status_code, 200)
             self.assertIn(self.signed, self.providers[name].call_args.args)
 
-    def test_text_reference_can_be_omitted_or_empty(self):
-        for body in ({'prompt': 'prompt', 'duration': 5}, {'prompt': 'prompt', 'duration': 5, 'reference_image_url': ''}):
-            self.assertEqual(self.client.post('/video-generation/text-to-video', json=body).status_code, 200)
+    def test_legacy_text_reference_is_explicitly_rejected(self):
+        for reference in ('', self.url()):
+            response = self.client.post('/video-generation/text-to-video', json={
+                'prompt': 'prompt', 'duration': 5, 'reference_image_url': reference,
+            })
+            self.assertEqual(response.status_code, 422)
         self.bucket.blob.assert_not_called()
-        self.assertEqual(self.providers['create_text_to_video_task'].call_args.args, ('prompt', '', 5))
+        self.reserve.assert_not_called()
 
     def test_unauthenticated(self):
         self.app.dependency_overrides.clear()
@@ -146,9 +147,12 @@ class VideoReferenceTests(unittest.TestCase):
                 self.assertEqual(self.post(endpoint, field).status_code,400)
         self.reserve.assert_not_called()
 
-    def test_dimensions_are_not_imposed_on_text_mode(self):
-        self.set_content(image_bytes(size=(9000,240)))
-        self.assertEqual(self.post('text-to-video','reference_image_url').status_code,200)
+    def test_text_mode_never_prepares_a_reference(self):
+        with patch.object(routes, 'create_text_to_video_task', AsyncMock(return_value={'taskId':'123'})) as provider:
+            response = self.client.post('/video-generation/text-to-video', json={'prompt':'prompt','duration':5})
+        self.assertEqual(response.status_code, 200)
+        self.bucket.blob.assert_not_called()
+        provider.assert_awaited_once_with('prompt', 5)
 
     def test_jpeg_png_webp_real_content_accepted(self):
         for fmt,mime in [('JPEG','image/jpeg'),('PNG','image/png'),('WEBP','image/webp')]:
@@ -204,7 +208,7 @@ class VideoProviderLoggingTests(unittest.IsolatedAsyncioTestCase):
             factory.return_value.__aenter__.return_value = client
             await provider.create_image_to_video_task('secret-token','prompt',5)
             await provider.create_reference_to_video_task('secret-token','prompt',5)
-            await provider.create_text_to_video_task('prompt','secret-token',5)
+            await provider.create_text_to_video_task('prompt',5)
             await provider.get_video_task('123')
         self.assertIn('200',' '.join(captured.output))
         for secret in ('secret-token','secret-signature','private-result'):

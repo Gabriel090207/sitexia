@@ -61,7 +61,8 @@ def _validate_finalization(operation, uid, generation_id):
 
 
 @isolated_transactional
-def _finalize_confirmed_task(transaction, uid, generation_id, observed_task_id, provider_status):
+def _finalize_confirmed_task(transaction, uid, generation_id, observed_task_id, provider_status,
+                             *, read_terminal_only=False):
     reference = db.collection("generations").document(generation_id)
     snapshot = reference.get(transaction=transaction)
     if not snapshot.exists:
@@ -81,6 +82,10 @@ def _finalize_confirmed_task(transaction, uid, generation_id, observed_task_id, 
     if (not isinstance(owner, dict) or any(owner.get(k) != v for k, v in expected.items())
             or not expected["materialId"] or not expected["sourceFaceId"]):
         raise InvalidFaceSwapEvidence("Propriedade da tarefa incompatível.")
+    # Result resolution can reuse a backend-committed terminal decision only
+    # after the same complete, transactional ownership/evidence checks.
+    if read_terminal_only:
+        return operation if operation["creditStatus"] in {"charged", "released"} else None
     if provider_status not in {"SUCCEEDED", "FAILED", "PENDING", "RUNNING", "UNKNOWN"}:
         raise InvalidFaceSwapEvidence("Confirmação do provedor inválida.")
     financial = operation["creditStatus"]
@@ -104,11 +109,13 @@ async def _fetch_face_swap_task(task_id):
     return await get(f"/openapi/v1/tasks/{task_id}", log_response=False)
 
 
-async def finalize_face_swap_operation(uid: str, generation_id: str) -> dict:
+async def finalize_face_swap_operation(uid: str, generation_id: str, *, reuse_terminal=False) -> dict:
     """Fetch server-side evidence, then finalize atomically; never trust client status.
 
     Transport, parsing and storage failures propagate without release. No provider
     call is inside a transaction. Legacy tasks without financial links are denied.
+    Result resolution may reuse an entirely validated committed terminal state;
+    default callers still query the provider and observe terminal conflicts.
     """
     if not isinstance(uid, str) or not uid.strip() or "/" in uid:
         raise FaceSwapOperationNotFound("Operação não encontrada.")
@@ -118,6 +125,11 @@ async def finalize_face_swap_operation(uid: str, generation_id: str) -> dict:
     if not snapshot.exists:
         raise FaceSwapOperationNotFound("Operação não encontrada.")
     task_id = _validate_finalization(snapshot.to_dict(), uid, generation_id)
+    if reuse_terminal:
+        terminal = _finalize_confirmed_task(db.transaction(), uid, generation_id, task_id, None,
+                                             read_terminal_only=True)
+        if terminal is not None:
+            return terminal
     task = await _fetch_face_swap_task(task_id)
     if not isinstance(task, dict):
         raise InvalidFaceSwapEvidence("Resposta do provedor inválida.")

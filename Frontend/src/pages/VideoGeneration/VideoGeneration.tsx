@@ -1,4 +1,7 @@
 import PrivateLibraryVideo from "../Library/PrivateLibraryVideo";
+import { prepareVideoFile } from "./prepareVideoFile";
+import PrivateVideoPreview from "./PrivateVideoPreview";
+import { lockPageScroll } from "../../utils/scrollLock";
 import { formatCredits } from "../../utils/formatCredits";
 import {
     useEffect,
@@ -26,7 +29,6 @@ import { getGenerationErrorMessage } from "../../utils/generationErrors";
 import {
     ImagePlus,
     Clock3,
-    Images,
     MessageSquareText,
     ArrowLeft,
     X,
@@ -52,7 +54,6 @@ import {
 import {
     createImageToVideo,
     createVideoExtend,
-    createReferenceToVideo,
     createTextToVideo,
     getVideoTask,
 } from "../../api/videoGeneration";
@@ -70,7 +71,6 @@ const [searchParams] = useSearchParams();
 type VideoMode =
     | "image-to-video"
     | "video-extend"
-    | "reference-to-video"
     | "text-to-video";
 
 const [activeMode, setActiveMode] =
@@ -108,10 +108,7 @@ const [prompt, setPrompt] =
 const [duration, setDuration] =
     useState<5 | 10 | 15>(5);
 
-const generationCost =
-    activeMode === "reference-to-video"
-        ? (duration / 5) * 2
-        : (duration / 5) * 1.2;
+const generationCost = (duration / 5) * 1.2;
 
 const [isUploading, setIsUploading] =
     useState(false);
@@ -157,10 +154,14 @@ useEffect(() => {
 const [isVideoSelectorOpen, setIsVideoSelectorOpen] =
     useState(false);
 
+useEffect(() => {
+    if (isVideoSelectorOpen) return lockPageScroll();
+}, [isVideoSelectorOpen]);
+
 const hasRequiredMedia =
     activeMode === "video-extend"
         ? !!currentSourceVideo?.taskId
-        : !!imageUrl;
+        : activeMode === "text-to-video" || !!imageUrl;
 
 const hasEnoughCredits =
     credits >= generationCost;
@@ -377,6 +378,7 @@ async function waitForVideoTask(
             task.taskStatus === "FAILED"
         ) {
 
+
             throw new Error(
                 task.errorMsg ||
                 "A geração do vídeo falhou."
@@ -408,15 +410,7 @@ async function videoUrlToFile(
     const blob =
         await response.blob();
 
-    return new File(
-        [blob],
-        `video-${Date.now()}.mp4`,
-        {
-            type:
-                blob.type ||
-                "video/mp4",
-        }
-    );
+    return prepareVideoFile(blob);
 
 }
 
@@ -457,6 +451,10 @@ async function retryVideoRegistration() {
 
 async function handleGenerateVideo() {
     if (generationInFlight.current || activeVideo) return;
+    if (!["image-to-video", "text-to-video", "video-extend"].includes(activeMode)) {
+        setError("Esta modalidade está indisponível para novas gerações.");
+        return;
+    }
 
     if (isUploading) {
 
@@ -475,32 +473,6 @@ async function handleGenerateVideo() {
 
         setError(
             "Selecione uma imagem primeiro."
-        );
-
-        return;
-
-    }
-
-    if (
-        activeMode === "reference-to-video" &&
-        !imageUrl
-    ) {
-
-        setError(
-            "Selecione uma imagem de referência primeiro."
-        );
-
-        return;
-
-    }
-
-    if (
-        activeMode === "text-to-video" &&
-        !imageUrl
-    ) {
-
-        setError(
-            "Selecione uma imagem de referência primeiro."
         );
 
         return;
@@ -566,22 +538,11 @@ async function handleGenerateVideo() {
             );
 
         } else if (
-            activeMode === "reference-to-video"
-        ) {
-
-            task = await createReferenceToVideo(
-                imageUrl,
-                prompt,
-                duration
-            );
-
-        } else if (
             activeMode === "text-to-video"
         ) {
 
             task = await createTextToVideo(
                 prompt,
-                imageUrl,
                 duration
             );
 
@@ -729,31 +690,6 @@ async function handleGenerateVideo() {
                                 <span>
                                     Estender Vídeo
                                 </span>
-
-                            </button>
-
-
-                            <button
-                                type="button"
-                                className={`video-generation-mode ${
-                                    activeMode === "reference-to-video"
-                                        ? "video-generation-mode-active"
-                                        : ""
-                                }`}
-                                onClick={() =>
-                                    handleModeChange("reference-to-video")
-                                }
-                            >
-
-                                <Images size={22} />
-
-                                <span>
-                                    Referência para Vídeo
-                                </span>
-
-                                <small>
-                                    Novo
-                                </small>
 
                             </button>
 
@@ -925,7 +861,7 @@ async function handleGenerateVideo() {
 
                                     </div>
 
-                                ) : (
+                                ) : activeMode !== "text-to-video" ? (
 
                                 <div className="video-generation-upload">
 
@@ -979,20 +915,13 @@ async function handleGenerateVideo() {
 
                                             <h2 className="video-generation-upload-title">
 
-                                                {activeMode === "reference-to-video" ||
-                                                activeMode === "text-to-video"
-                                                    ? "Envie sua imagem de referência"
-                                                    : "Envie sua imagem"}
+                                                Envie sua imagem
 
                                             </h2>
 
                                             <p className="video-generation-upload-description">
 
-                                                {activeMode === "reference-to-video"
-                                                    ? "Envie uma imagem de referência para orientar a criação do vídeo."
-                                                    : activeMode === "text-to-video"
-                                                        ? "Envie uma imagem de referência para auxiliar a geração do vídeo a partir do seu texto."
-                                                        : "Arraste uma imagem para esta área ou clique no botão abaixo para selecionar um arquivo."}
+                                                Arraste uma imagem para esta área ou clique no botão abaixo para selecionar um arquivo.
 
                                             </p>
 
@@ -1020,7 +949,7 @@ async function handleGenerateVideo() {
 
                                 </div>
 
-                                )}
+                                ) : null}
 
 
                                 {/* PROMPT */}
@@ -1226,8 +1155,8 @@ async function handleGenerateVideo() {
                                                     }}
                                                 >
 
-                                                    <Video size={36} aria-hidden="true" />
-                                                    <span>Selecionar vídeo {index + 1}</span>
+                                                    <PrivateVideoPreview itemId={item.id} uid={user?.uid ?? ""} />
+                                                    <span className="video-generation-selector-label">Selecionar vídeo {index + 1}</span>
 
                                                 </button>
 

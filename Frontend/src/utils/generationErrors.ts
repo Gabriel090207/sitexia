@@ -37,6 +37,9 @@ const httpMessages: Readonly<Record<number, string>> = {
 
 // Somente textos exatos controlados pela aplicação podem ser reutilizados.
 const safeDetails = new Set([
+    "O provedor não aceitou a solicitação de geração de imagem.",
+    "O provedor não aceitou a solicitação, mas não foi possível confirmar a liberação da reserva. Não inicie outra geração para substituir esta tentativa.",
+    "Não foi possível confirmar a criação da imagem. A tarefa ou reserva pode existir. Não inicie outra geração para substituir esta tentativa.",
     "Duração inválida.",
     "Quantidade de imagens inválida.",
     "Prompt obrigatório.",

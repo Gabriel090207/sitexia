@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { lockPageScroll } from "../../utils/scrollLock";
 
 import {
     Menu,
@@ -73,15 +74,7 @@ function Header() {
 
     useEffect(() => {
 
-        document.body.style.overflow = sidebarOpen
-            ? "hidden"
-            : "auto";
-
-        return () => {
-
-            document.body.style.overflow = "auto";
-
-        };
+        if (sidebarOpen) return lockPageScroll();
 
     }, [sidebarOpen]);
 

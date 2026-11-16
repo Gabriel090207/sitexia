@@ -70,6 +70,31 @@ class SubmissionFlowTests(unittest.IsolatedAsyncioTestCase):
             await self.submit(face='6')
         self.assertEqual(error.exception.status_code, 409)
 
+    async def test_photo_without_duration_reserves_image_price_and_replays_once(self):
+        self.material.return_value = {'materialId': '123', 'status': 'SUCCEEDED',
+                                      'materialType': 'PHOTO', 'faces': [{'id': '5'}]}
+        task = await self.submit()
+        self.assertEqual(self.state[('users', 'alice')], {'credits': 5.0, 'reservedCredits': 0.1})
+        record = self.state[('generations', task['generationId'])]
+        self.assertEqual(record['status'], 'PROCESSING')
+        self.assertEqual(record['reservationIntent']['materialType'], 'PHOTO')
+        self.assertIsNone(record['reservationIntent']['duration'])
+        before = deepcopy(self.state)
+        self.material.side_effect = AssertionError('replay must not query material')
+        self.assertEqual(await self.submit(), task)
+        self.assertEqual(self.state, before)
+        self.create.assert_awaited_once_with('123', '5', 'https://storage.invalid/signed')
+
+    async def test_photo_with_positive_duration_never_reserves_or_sends(self):
+        self.material.return_value = {'materialId': '123', 'status': 'SUCCEEDED',
+                                      'materialType': 'PHOTO', 'duration': 1, 'faces': [{'id': '5'}]}
+        before = deepcopy(self.state)
+        with self.assertRaises(HTTPException) as error:
+            await self.submit()
+        self.assertEqual(error.exception.status_code, 400)
+        self.assertEqual(self.state, before)
+        self.create.assert_not_awaited()
+
     async def test_concurrent_requests_send_at_most_once(self):
         with ThreadPoolExecutor(max_workers=2) as pool:
             def submit(_):

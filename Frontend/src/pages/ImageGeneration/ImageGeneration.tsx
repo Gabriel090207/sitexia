@@ -44,40 +44,10 @@ import {
     createLibraryImage,
 } from "../../services/library";
 
-type ImageStyle =
-    | "realistic"
-    | "anime";
-
 type ImageQuantity =
     | 1
     | 4
     | 9;
-
-interface ImageStyleOption {
-
-    id: ImageStyle;
-
-    title: string;
-
-    description: string;
-
-}
-
-const imageStyles: ImageStyleOption[] = [
-
-    {
-        id: "realistic",
-        title: "Realista",
-        description: "Imagens com aparência fotográfica.",
-    },
-
-    {
-        id: "anime",
-        title: "Anime",
-        description: "Visual inspirado em animações.",
-    },
-
-];
 
 export default function ImageGeneration() {
 
@@ -96,9 +66,6 @@ const [credits, setCredits] =
 
     const [referencePreview, setReferencePreview] =
         useState<string | null>(null);
-
-    const [imageStyle, setImageStyle] =
-        useState<ImageStyle>("realistic");
 
     const [quantity, setQuantity] =
         useState<ImageQuantity>(1);
@@ -121,8 +88,8 @@ const hasEnoughCredits =
 const [
     generatedImages,
     setGeneratedImages,
-] = useState<{ url: string; owner: NonNullable<typeof user> }[]>([]);
-const visibleImages = generatedImages.filter(image => image.owner === user);
+] = useState<{ url: string; owner: NonNullable<typeof user>; groupedPreview?: boolean }[]>([]);
+const visibleImages = generatedImages.filter(image => image.owner === user && !image.groupedPreview);
 const pageMounted = useRef(false);
 useEffect(() => {
     pageMounted.current = true;
@@ -378,7 +345,7 @@ async function handleGenerateImage() {
         const task =
             await createTextToImage(
                 prompt,
-                imageStyle,
+                "realistic",
                 quantity
             );
 
@@ -393,6 +360,10 @@ async function handleGenerateImage() {
 
        
 
+        // The provider prepends a montage to its 4/9-image batches.
+        // Keep saving every file, but display only the individual results.
+        const hasGroupedPreview = (quantity === 4 || quantity === 9)
+            && Array.isArray(result.imageUrls) && result.imageUrls.length === quantity + 1;
         const outcome = await processImageResults(
             result.imageUrls,
             user.uid,
@@ -400,10 +371,10 @@ async function handleGenerateImage() {
             {
                 upload: uploadImageFromUrl,
                 register: createLibraryImage,
-                onSaved: (url) => {
+                onSaved: (url, index) => {
                     // Presentation only: storage and library registration stay unchanged.
                     if (pageMounted.current && auth.currentUser === user) {
-                        setGeneratedImages((saved) => [...saved, { url, owner: user }]);
+                        setGeneratedImages((saved) => [...saved, { url, owner: user, groupedPreview: hasGroupedPreview && index === 0 }]);
                     }
                 },
             },
@@ -579,7 +550,7 @@ async function handleGenerateImage() {
 
                                 referencePreview ?
 
-                                    <div className="image-generation-reference-preview">
+                                    <div className="image-generation-upload image-generation-reference-preview">
 
                                         <img
                                             src={referencePreview}
@@ -618,6 +589,7 @@ async function handleGenerateImage() {
                                     <div
                                         className="image-generation-upload"
                                         role="button"
+                                        aria-label="Selecionar imagem de referência (opcional)"
                                         tabIndex={0}
                                         onClick={openFileSelector}
                                         onDragOver={(event) =>
@@ -631,6 +603,7 @@ async function handleGenerateImage() {
                                                 event.key === " "
                                             ) {
 
+                                                event.preventDefault();
                                                 openFileSelector();
 
                                             }
@@ -640,7 +613,7 @@ async function handleGenerateImage() {
 
                                         <div className="image-generation-upload-icon">
 
-                                            <ImagePlus size={40} />
+                                            <ImagePlus size={42} />
 
                                         </div>
 
@@ -662,14 +635,9 @@ async function handleGenerateImage() {
 
                                         </span>
 
-                                        <button
-                                            type="button"
-                                            className="image-generation-upload-button"
-                                        >
-
+                                        <span className="image-generation-upload-button">
                                             Selecionar imagem
-
-                                        </button>
+                                        </span>
 
                                     </div>
 
@@ -700,7 +668,7 @@ async function handleGenerateImage() {
 
                                     <p>
 
-                                        Personalize o formato, o estilo e a quantidade de imagens.
+                                        Escolha a quantidade de imagens. A geração utiliza o estilo Realista.
 
                                     </p>
 
@@ -712,66 +680,6 @@ async function handleGenerateImage() {
                             <div className="image-generation-settings">
 
                                 
-
-
-                                <div className="image-generation-setting">
-
-                                    <h3>
-
-                                        Estilo
-
-                                    </h3>
-
-                                    <div className="image-generation-style-grid">
-
-                                        {
-
-                                            imageStyles.map(
-                                                style => (
-
-                                                    <button
-                                                        key={style.id}
-                                                        type="button"
-                                                        className={
-                                                            imageStyle === style.id
-                                                                ? "image-generation-style image-generation-style-active"
-                                                                : "image-generation-style"
-                                                        }
-                                                        onClick={() =>
-                                                            setImageStyle(
-                                                                style.id
-                                                            )
-                                                        }
-                                                    >
-
-                                                        <ImageIcon size={21} />
-
-                                                        <div>
-
-                                                            <strong>
-
-                                                                {style.title}
-
-                                                            </strong>
-
-                                                            <span>
-
-                                                                {style.description}
-
-                                                            </span>
-
-                                                        </div>
-
-                                                    </button>
-
-                                                )
-                                            )
-
-                                        }
-
-                                    </div>
-
-                                </div>
 
 
                                 <div className="image-generation-setting">

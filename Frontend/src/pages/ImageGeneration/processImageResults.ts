@@ -1,7 +1,7 @@
 type ImageResultServices = {
     upload: (url: string, folder: string) => Promise<string>;
     register: (userId: string, url: string, type: "image-generation") => Promise<unknown>;
-    onSaved: (url: string) => void;
+    onSaved: (url: string, index: number) => void;
 };
 
 export async function processImageResults(
@@ -40,7 +40,7 @@ export async function processImageResults(
             uploadFailures++;
             continue;
         }
-        services.onSaved(savedUrl);
+        services.onSaved(savedUrl, index);
         try {
             await services.register(userId, savedUrl, "image-generation");
         } catch {

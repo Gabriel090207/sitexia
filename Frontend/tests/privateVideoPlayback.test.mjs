@@ -129,3 +129,49 @@ test('player uses no persistence, full-file downloads or public fallback',()=>{
     const component=readFileSync(new URL('../src/pages/Library/PrivateLibraryVideo.tsx',import.meta.url),'utf8');
     assert.ok(component.includes('controls playsInline preload="none"'));assert.ok(component.includes('player.dispose()'));
 });
+
+test('preparation makes native controls ready without requesting playback or a renewal timer',async()=>{
+    const s=setup();let plays=0;const originalPlay=s.video.play;
+    s.video.play=async function(){plays++;return originalPlay.call(this);};
+    await s.player.prepare();
+    assert.equal(s.calls.length,1);assert.equal(s.states.at(-1).status,'ready');
+    assert.equal(s.video.paused,true);assert.equal(plays,0);assert.equal(s.timers.size,0);
+    await s.metadata();assert.equal(plays,0);
+    await s.player.prepare();assert.equal(s.calls.length,1);
+    await s.video.play();assert.equal(plays,1);assert.equal(s.timers.size,1);
+    s.player.dispose();
+});
+test('native play after a long pause renews once and preserves position and preferences',async()=>{
+    const s=setup();await s.player.prepare();await s.metadata();await s.video.play();
+    s.video.currentTime=25;s.video.volume=.2;s.video.playbackRate=1.5;s.video.pause();await tick();
+    s.advance(1800001);assert.equal(s.calls.length,1);
+    await s.video.play();await tick();await s.metadata();
+    assert.equal(s.calls.length,2);assert.equal(s.video.currentTime,25);
+    assert.equal(s.video.volume,.2);assert.equal(s.video.playbackRate,1.5);assert.equal(s.video.paused,false);
+    s.player.dispose();
+});
+test('repreparation after expiry while paused never starts playback',async()=>{
+    const s=setup();await s.player.prepare();await s.metadata();s.video.currentTime=18;
+    s.advance(1800001);await s.player.prepare();await s.metadata();
+    assert.equal(s.calls.length,2);assert.equal(s.video.currentTime,18);assert.equal(s.video.paused,true);
+    s.player.dispose();
+});
+test('simultaneous prepare calls share one authorization',async()=>{
+    const s=setup();let finish;
+    s.api.post=(...args)=>new Promise(resolve=>{finish=()=>s.original(...args).then(resolve);});
+    const a=s.player.prepare(),b=s.player.prepare();finish();await Promise.all([a,b]);
+    assert.equal(s.calls.length,1);assert.equal(s.video.paused,true);s.player.dispose();
+});
+test('retry preparation after an error does not restart failed playback automatically',async()=>{
+    const s=setup();s.api.post=async()=>{throw Error('offline');};
+    await s.player.play();assert.equal(s.states.at(-1).status,'error');
+    s.api.post=s.original;await s.player.prepare();await s.metadata();
+    assert.equal(s.states.at(-1).status,'ready');assert.equal(s.video.paused,true);s.player.dispose();
+});
+for(const next of [null,{uid:'bob'}])test('session change invalidates a pending preparation',async()=>{
+    const s=setup();let finish;
+    s.api.post=(...args)=>new Promise(resolve=>{finish=()=>s.original(...args).then(resolve);});
+    const pending=s.player.prepare();s.change(next);finish();await pending;
+    assert.equal(s.video.src,'');assert.equal(s.calls[0][2].signal.aborted,true);
+    await s.player.prepare();assert.equal(s.calls.length,1);s.player.dispose();
+});

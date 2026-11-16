@@ -3,17 +3,26 @@ import { usePrivateImage } from "../../hooks/usePrivateImage";
 
 export default function PrivateGeneratedImage({ value, uid, index }: { value: string; uid: string; index: number }) {
     const container = useRef<HTMLDivElement>(null);
-    const [visible, setVisible] = useState(false);
+    const identity = JSON.stringify([uid, value]);
+    const [visibility, setVisibility] = useState({ identity, activated: false });
+    if (visibility.identity !== identity) {
+        setVisibility({ identity, activated: false });
+    }
+    const visible = visibility.identity === identity && visibility.activated;
     const [failedUrl, setFailedUrl] = useState("");
     useEffect(() => {
         if (!container.current) return;
-        if (typeof IntersectionObserver === "undefined") { setVisible(true); return; }
+        let active = true;
+        if (typeof IntersectionObserver === "undefined") { setVisibility({ identity, activated: true }); return; }
         const observer = new IntersectionObserver(entries => {
-            setVisible(entries.some(entry => entry.isIntersecting));
+            if (!active || !entries.some(entry => entry.isIntersecting)) return;
+            // Visibility starts the read; leaving the viewport must not release it.
+            setVisibility({ identity, activated: true });
+            observer.disconnect();
         }, { rootMargin: "200px" });
         observer.observe(container.current);
-        return () => observer.disconnect();
-    }, []);
+        return () => { active = false; observer.disconnect(); };
+    }, [identity]);
     const image = usePrivateImage(value, uid, visible);
     const decodeError = image.status === "success" && failedUrl === image.url;
     return (

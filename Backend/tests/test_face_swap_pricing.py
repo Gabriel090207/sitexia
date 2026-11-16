@@ -26,6 +26,20 @@ class FaceSwapPricingTests(unittest.TestCase):
                 self.assertIsInstance(price, int)
                 self.assertEqual(price, expected)
 
+    def test_photo_uses_existing_image_price(self):
+        for material in ({"materialType": "PHOTO"}, *(
+            {"materialType": "PHOTO", "duration": duration} for duration in (None, 0, 0.0)
+        )):
+            with self.subTest(material=material):
+                price = calculate_face_swap_price(material)
+                self.assertIsInstance(price, float)
+                self.assertEqual(price, 0.1)
+
+    def test_photo_rejects_inconsistent_duration(self):
+        for duration in (1, -1, True, False, "0", "15", math.nan, math.inf, -math.inf, [], {}):
+            with self.subTest(duration=duration), self.assertRaises(InvalidFaceSwapMetadata):
+                calculate_face_swap_price({"materialType": "PHOTO", "duration": duration})
+
     def test_fractional_seconds_without_truncation(self):
         for duration, expected in ((0.1, 1), (14.9, 1), (15.01, 2), (30.01, 3),
                                    (math.nextafter(15.0, math.inf), 2), (5e-324, 1)):
@@ -40,7 +54,7 @@ class FaceSwapPricingTests(unittest.TestCase):
             calculate_face_swap_price({"materialType": "VIDEO"})
 
     def test_unknown_types_including_gif_are_not_classified(self):
-        for material_type in (None, "GIF", "image", "video", "OTHER", True, []):
+        for material_type in (None, "GIF", "image", "photo", "video", "OTHER", True, [], {}):
             with self.subTest(material_type=material_type), self.assertRaises(InvalidFaceSwapMetadata):
                 calculate_face_swap_price({"materialType": material_type, "duration": 15})
 

@@ -21,19 +21,25 @@
 
 .library-private-video-status {
     position: absolute;
-    inset: 0 0 52px;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    max-height: calc(100% - 64px);
+    overflow: auto;
+    pointer-events: none;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    padding: 16px;
+    padding: 8px;
     text-align: center;
     color: #ddd;
     background: rgba(0, 0, 0, .65);
 }
 
 .library-private-video-status button {
+    pointer-events: auto;
     padding: 10px 16px;
     border-radius: 10px;
     cursor: pointer;

@@ -10,7 +10,7 @@ from google.api_core.exceptions import Aborted, DeadlineExceeded, ServiceUnavail
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.dependencies.auth import AuthenticatedUser, get_current_user
 
@@ -27,7 +27,6 @@ from app.services.deepswap import (
     create_image_to_video_task,
     create_text_to_video_task,
     create_video_extend_task,
-    create_reference_to_video_task,
     get_video_task,
 )
 
@@ -73,7 +72,16 @@ async def create_reserved_video(user_id, mode, duration, create_task, *task_args
     except httpx.HTTPStatusError as error:
         # 408 e 5xx não comprovam que o provedor deixou de criar a tarefa.
         if 400 <= error.response.status_code < 500 and error.response.status_code != 408:
-            release_reserved_generation(generation_id)
+            try:
+                release_reserved_generation(generation_id)
+            except Exception:
+                if mode != "video-extend":
+                    raise
+                logger.warning("Extensão rejeitada category=release_unconfirmed http_status=%s", error.response.status_code)
+                raise HTTPException(503, "O provedor rejeitou a extensão, mas não foi possível confirmar a liberação da reserva. Não repita a operação automaticamente.") from None
+            if mode == "video-extend":
+                logger.warning("Extensão rejeitada category=provider_rejection http_status=%s", error.response.status_code)
+                raise HTTPException(502, "O provedor não aceitou a solicitação de extensão de vídeo.") from None
             if mode == "image-to-video":
                 logger.warning(
                     "Image to Video rejeitado: status=%s generationId=%s",
@@ -155,23 +163,40 @@ class VideoExtendRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_task_id: str
-    prompt: str
-    duration: int
+    prompt: str = Field(max_length=1500)
+    duration: int = Field(strict=True)
+
+    @field_validator("source_task_id")
+    @classmethod
+    def valid_source_task_id(cls, value: str) -> str:
+        if not value or any(char not in "0123456789" for char in value):
+            raise ValueError("Identificador da tarefa inválido.")
+        canonical = value.lstrip("0")
+        if not canonical or len(canonical) > 19 or (len(canonical) == 19 and canonical > "9223372036854775807"):
+            raise ValueError("Identificador da tarefa fora do intervalo int64 positivo.")
+        return canonical
+
+    @field_validator("duration")
+    @classmethod
+    def valid_duration(cls, value: int) -> int:
+        if value not in (5, 10, 15):
+            raise ValueError("Duração inválida.")
+        return value
 
 
 class ReferenceToVideoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reference_url: str
-    prompt: str
+    prompt: str = Field(max_length=1500)
     duration: int
 
 
 class TextToVideoRequest(BaseModel):
+    """Text-only T2V: legacy reference_image_url is explicitly rejected (422)."""
     model_config = ConfigDict(extra="forbid")
 
-    prompt: str
-    reference_image_url: str = ""
+    prompt: str = Field(max_length=1500)
     duration: int
 
 
@@ -226,15 +251,45 @@ async def get_video_generation_task(
         task = await get_video_task(task_id)
     except (httpx.HTTPError, json.JSONDecodeError):
         raise HTTPException(502, "Não foi possível consultar a geração de vídeo.") from None
-    if generation is not None:
-        status = task.get("taskStatus") if isinstance(task, dict) else None
+
+    if not isinstance(task, dict):
+        raise HTTPException(502, "Resposta inválida da geração de vídeo.")
+    if "taskId" in task:
+        returned_id = task["taskId"]
+        if (isinstance(returned_id, bool) or not isinstance(returned_id, (str, int))
+                or str(returned_id) != task_id):
+            raise HTTPException(502, "Identidade da tarefa de vídeo incompatível.")
+    status = task.get("taskStatus")
+    if not isinstance(status, str) or status not in {"SUCCEEDED", "FAILED", "PENDING", "RUNNING", "UNKNOWN"}:
+        raise HTTPException(502, "Estado da tarefa de vídeo inválido.")
+
+    try:
         if status == "SUCCEEDED":
             charge_reserved_generation(generation["generationId"])
         elif status == "FAILED":
             release_reserved_generation(generation["generationId"])
         elif status not in ("PENDING", "RUNNING"):
-            logger.warning("Estado de task desconhecido; reserva mantida: generationId=%s", generation["generationId"])
-    return task
+            logger.warning("Consulta de vídeo category=unknown_status")
+    except Exception:
+        logger.warning("Consulta de vídeo category=financial_finalization_unconfirmed")
+        raise HTTPException(503, {
+            "code": "financial_finalization_unconfirmed",
+            "taskStatus": status,
+            "message": "Não foi possível confirmar a finalização financeira da geração de vídeo. Não inicie outra geração para substituir esta tentativa.",
+        }) from None
+
+    # Provider diagnostics are not a public response contract. Only expose the
+    # status and media fields used by the UI, never raw error bodies or metadata.
+    result = {"taskStatus": status}
+    if "taskId" in task:
+        result["taskId"] = task["taskId"]
+    if status == "SUCCEEDED":
+        for field in ("videoUrl", "coverUrl"):
+            if isinstance(task.get(field), str):
+                result[field] = task[field]
+    elif status == "FAILED":
+        result["errorMsg"] = "A geração do vídeo falhou."
+    return result
 
 
 @router.post("/extend")
@@ -248,15 +303,24 @@ async def extend_video(
 
     authorize_video_task(request.source_task_id, current_user.uid)
 
-    return await create_reserved_video(
-        current_user.uid,
-        "video-extend",
-        request.duration,
-        create_video_extend_task,
-        request.source_task_id,
-        request.prompt,
-        request.duration
-    )
+    try:
+        return await create_reserved_video(
+            current_user.uid,
+            "video-extend",
+            request.duration,
+            create_video_extend_task,
+            request.source_task_id,
+            request.prompt,
+            request.duration
+        )
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, json.JSONDecodeError):
+        logger.warning("Extensão não confirmada category=provider_unconfirmed")
+        raise HTTPException(502, "Não foi possível confirmar a extensão de vídeo. A reserva pode continuar ativa. Não inicie outra extensão para substituir esta tentativa.") from None
+    except Exception:
+        logger.warning("Extensão não confirmada category=operation_unconfirmed")
+        raise HTTPException(503, "Não foi possível confirmar a operação de extensão. A tarefa ou reserva pode existir. Não inicie outra extensão para substituir esta tentativa.") from None
 
 
 @router.post("/reference-to-video")
@@ -268,17 +332,9 @@ async def create_reference_to_video(
     ],
 ):
 
-    reference = await run_in_threadpool(prepare_video_reference, current_user.uid, request.reference_url, bounded_dimensions=True)
-
-    return await create_private_reference_video(
-        current_user.uid,
-        "reference-to-video",
-        request.duration,
-        create_reference_to_video_task,
-        reference,
-        request.prompt,
-        request.duration
-    )
+    # Keep the authenticated route explicit for old clients; historical task
+    # queries/finalizers remain available through the shared task endpoint.
+    raise HTTPException(410, "Referência para Vídeo está indisponível para novas gerações.")
 
 
 @router.post("/text-to-video")
@@ -290,14 +346,11 @@ async def create_text_to_video(
     ],
 ):
 
-    reference = await run_in_threadpool(prepare_video_reference, current_user.uid, request.reference_image_url, bounded_dimensions=False) if request.reference_image_url else ""
-
     return await create_private_reference_video(
         current_user.uid,
         "text-to-video",
         request.duration,
         create_text_to_video_task,
         request.prompt,
-        reference,
         request.duration
     )

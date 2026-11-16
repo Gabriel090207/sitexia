@@ -47,23 +47,27 @@ export async function getMaterial(
 }
 
 export async function getSwapTask(
-    taskId: string
+    taskId: string,
+    signal?: AbortSignal
 ) {
     const { data } = await api.get(
-        `/swap/task/${taskId}`
+        `/swap/task/${taskId}`,
+        { signal }
     );
 
     return data;
 }
 
 export async function getSwapResult(
-    taskId: string
+    taskId: string,
+    signal?: AbortSignal
 ) {
     const { data } = await api.post(
         "/swap/result",
         {
             task_id: taskId
-        }
+        },
+        { signal }
     );
 
     return data;

@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { imageBytes } from './fixtures/generatedImages.mjs';
 
 const read = path => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8');
-function setup({ failUploadAt, failRegisterAt, differentSnapshot = false } = {}) {
+function setup({ failUploadAt, failRegisterAt, differentSnapshot = false, bytes = imageBytes("png"), mime = "image/png", decodeError = false, ok = true, response, dimensions = [2,3] } = {}) {
     const writes = [], records = [], reads = [];
     const auth = { currentUser: { uid: 'alice' } };
     let uploads = 0, registrations = 0, tokenCalls = 0;
@@ -37,15 +38,17 @@ function setup({ failUploadAt, failRegisterAt, differentSnapshot = false } = {})
         const module = { exports: {} };
         const code = ts.transpileModule(read(path), { compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.CommonJS } }).outputText;
         vm.runInNewContext(code, {
-            module, exports: module.exports, File, URL,
+            module, exports: module.exports, File, Blob, URL, Uint8Array, DataView, setTimeout, clearTimeout,
+            createImageBitmap: async () => { if(decodeError) throw Error('decode failed');return {width:dimensions[0],height:dimensions[1],close(){}}; },
             console: new Proxy({}, { get() { throw Error('No logging permitted'); } }),
-            fetch: async url => { reads.push(url); return { ok: true, blob: async () => new Blob(['synthetic-image'], { type: 'image/png' }) }; },
+            fetch: async url => { reads.push(url); return response ?? { ok, blob: async () => new Blob([bytes], { type: mime }) }; },
             require: name => { if (!(name in dependencies)) throw Error(name); return dependencies[name]; },
         });
         return module.exports;
     };
     const references = load('services/storageReferences.ts');
     dependencies['./storageReferences'] = references;
+    dependencies['./prepareGeneratedImage'] = load('services/prepareGeneratedImage.ts');
     return { ...load('services/storage.ts'), ...references, ...load('services/library.ts'),
         ...load('pages/ImageGeneration/processImageResults.ts'), writes, records, reads, auth,
         tokenCalls: () => tokenCalls };
@@ -119,4 +122,69 @@ test('new references use the same session authorization as legacy references', a
 });
 test('final upload implementation has no token API or logging fallback', () => {
     assert.doesNotMatch(read('services/storage.ts'), /getDownloadURL|console\./);
+});
+
+
+for(const [format,mime,expected,extension] of [
+    ['jpeg','application/octet-stream','image/jpeg','jpg'],['jpeg','','image/jpeg','jpg'],
+    ['jpeg','image/jpeg','image/jpeg','jpg'],['png','image/jpeg','image/png','png'],
+    ['webp','text/plain','image/webp','webp'],['gif','application/octet-stream','image/gif','gif'],
+    ['avif','image/png','image/avif','avif'],['bmp','','image/bmp','bmp'],
+]) test(`generated ${format} with provider MIME ${mime} uploads canonical validated metadata`,async()=>{
+    const s=setup({bytes:imageBytes(format),mime});
+    const address=await s.uploadImageFromUrl('https://provider.invalid/wrong.mp4','users/alice/images');
+    assert.equal(s.writes.length,1);assert.equal(s.writes[0].metadata.contentType,expected);
+    assert.equal(s.writes[0].data.type,expected);
+    assert.ok(s.writes[0].reference.fullPath.endsWith('.'+extension));
+    assert.equal(s.resolveStorageReference(address,'alice').fullPath,s.writes[0].reference.fullPath);
+    await s.createLibraryImage('alice',address,'image-generation');
+    assert.equal(s.records[0].data.imageUrl,address);assert.equal(s.records[0].data.type,'image-generation');
+    assert.equal(s.tokenCalls(),0);
+});
+for(const [name,bytes] of [
+    ['HTML',Buffer.from('<html>error</html>')],['JSON',Buffer.from('{"error":"failed"}')],
+    ['empty',Buffer.alloc(0)],['video',Buffer.from([0,0,0,24,...Buffer.from('ftypisom'),0,0,0,0,...Buffer.from('iso2mp41')])],
+    ['truncated JPEG',imageBytes('jpeg').subarray(0,-2)],['truncated PNG',imageBytes('png').subarray(0,-8)],
+    ['truncated WebP',imageBytes('webp').subarray(0,-2)],['oversize',Buffer.alloc(32*1024*1024+1)],
+])test(`generated ${name} is rejected before upload even with image/jpeg`,async()=>{
+    const s=setup({bytes,mime:'image/jpeg'});
+    await assert.rejects(s.uploadImageFromUrl('https://provider.invalid/result','users/alice/images'));
+    assert.equal(s.writes.length,0);assert.equal(s.records.length,0);
+});
+test('signature alone is insufficient: failed image decode prevents upload',async()=>{
+    const s=setup({decodeError:true});
+    await assert.rejects(s.uploadImageFromUrl('https://provider.invalid/result','users/alice/images'));
+    assert.equal(s.writes.length,0);
+});
+test('provider HTTP error prevents image validation and upload',async()=>{
+    const s=setup({ok:false});
+    await assert.rejects(s.uploadImageFromUrl('https://provider.invalid/result','users/alice/images'),/baixar/);
+    assert.equal(s.writes.length,0);
+});
+
+
+for(const dimensions of [[0,3],[2,0],[9000,9000]])test(`unsafe decoded dimensions ${dimensions} prevent upload`,async()=>{
+    const s=setup({dimensions});await assert.rejects(s.uploadImageFromUrl('https://provider.invalid/result','users/alice/images'));
+    assert.equal(s.writes.length,0);
+});
+test('oversize Content-Length is rejected before reading body',async()=>{
+    let read=false;
+    const s=setup({response:{ok:true,headers:{get:()=>String(32*1024*1024+1)},blob:async()=>{read=true;throw Error('unexpected');}}});
+    await assert.rejects(s.uploadImageFromUrl('https://provider.invalid/result','users/alice/images'));
+    assert.equal(read,false);assert.equal(s.writes.length,0);
+});
+test('streamed download exceeds byte limit: cancel reader and never upload',async()=>{
+    let count=0,cancelled=false,released=false;
+    const reader={read:async()=>({done:false,value:new Uint8Array(++count===1?32*1024*1024:1)}),
+        cancel:async()=>{cancelled=true;},releaseLock:()=>{released=true;}};
+    const s=setup({response:{ok:true,body:{getReader:()=>reader}}});
+    await assert.rejects(s.uploadImageFromUrl('https://provider.invalid/result','users/alice/images'));
+    assert.equal(cancelled,true);assert.equal(released,true);assert.equal(s.writes.length,0);
+});
+test('streamed JPEG without trustworthy headers uses signature and canonical metadata',async()=>{
+    let consumed=false,released=false;
+    const reader={read:async()=>consumed?{done:true}:(consumed=true,{done:false,value:imageBytes('jpeg')}),releaseLock:()=>{released=true;}};
+    const s=setup({response:{ok:true,body:{getReader:()=>reader}}});
+    await s.uploadImageFromUrl('https://provider.invalid/result','users/alice/images');
+    assert.equal(released,true);assert.equal(s.writes[0].metadata.contentType,'image/jpeg');
 });

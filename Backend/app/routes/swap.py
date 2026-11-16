@@ -162,7 +162,7 @@ async def get_swap_result(
     except ValueError:
         raise HTTPException(404, "Tarefa não encontrada.") from None
     require_task_owner(task_id, current_user.uid)
-    financial = await finalize_linked_task(current_user.uid, task_id)
+    financial = await finalize_linked_task(current_user.uid, task_id, reuse_terminal=True)
 
     try:
         task = await get_deep_response(
@@ -179,6 +179,14 @@ async def get_swap_result(
     if not isinstance(task, dict):
         raise HTTPException(status_code=502, detail="Resposta inválida da Deep.")
 
+    if "taskId" in task:
+        try:
+            returned_id = normalize_swap_id(task["taskId"])
+        except ValueError:
+            raise HTTPException(502, "A Deep retornou uma tarefa inválida.") from None
+        if returned_id != task_id:
+            raise HTTPException(502, "A Deep retornou uma tarefa inválida.")
+
     status = (financial["status"] if financial is not None and financial.get("creditStatus") in ("charged", "released")
               else task.get("taskStatus"))
     if status in ("PENDING", "RUNNING"):
@@ -187,6 +195,12 @@ async def get_swap_result(
         raise HTTPException(status_code=422, detail="O processamento do Face Swap falhou.")
     if status != "SUCCEEDED":
         raise HTTPException(status_code=502, detail="Estado de tarefa inválido retornado pela Deep.")
+
+    # A committed charge is financial evidence, not proof that a conflicting
+    # provider response contains an available result. GET retains the existing
+    # durable observation of terminal conflicts; this route fails closed.
+    if financial is not None and task.get("taskStatus") != "SUCCEEDED":
+        raise HTTPException(502, "Estado do resultado incompatível com a operação confirmada.")
 
     candidates = [task.get("videoUrl")]
     image_urls = task.get("imageUrls")

@@ -154,7 +154,7 @@ async def submit_face_swap(uid, key, material_id, source_face_id, target_url, lo
     return {"taskId": task_id, "taskStatus": "PENDING", "generationId": linked["generationId"]}
 
 
-async def finalize_linked_task(uid, task_id):
+async def finalize_linked_task(uid, task_id, *, reuse_terminal=False):
     """Legacy ownership documents have no generationId: never charge them again."""
     try:
         owner = db.collection("face_swap_tasks").document(task_id).get().to_dict()
@@ -168,6 +168,8 @@ async def finalize_linked_task(uid, task_id):
         operation = reference.get().to_dict()
         if operations._validate_finalization(operation, uid, owner["generationId"]) != task_id:
             raise HTTPException(503, "Vínculo financeiro incompatível com a tarefa consultada.")
+        if reuse_terminal:
+            return await operations.finalize_face_swap_operation(uid, owner["generationId"], reuse_terminal=True)
         return await operations.finalize_face_swap_operation(uid, owner["generationId"])
     except HTTPException:
         raise

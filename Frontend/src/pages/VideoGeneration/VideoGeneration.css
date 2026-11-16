@@ -103,7 +103,7 @@
 
     display:grid;
 
-    grid-template-columns:repeat(4,1fr);
+    grid-template-columns:repeat(3,minmax(0,1fr));
 
     gap:18px;
 
@@ -714,6 +714,9 @@
 
 .video-generation-selector-overlay{
 
+    overscroll-behavior: none;
+    overflow: hidden;
+
     position:fixed;
 
     inset:0;
@@ -735,6 +738,12 @@
 
 .video-generation-selector{
 
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: calc(100vh - 60px);
+    max-height: calc(100dvh - 60px);
+
     width:100%;
 
     max-width:900px;
@@ -752,6 +761,8 @@
 }
 
 .video-generation-selector-header{
+
+    flex-shrink: 0;
 
     display:flex;
 
@@ -851,6 +862,12 @@
 
 .video-generation-selector-grid{
 
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    flex: 0 1 auto;
+
     display:grid;
 
     grid-template-columns:repeat(3, 1fr);
@@ -945,7 +962,7 @@
 
     .video-generation-modes{
 
-        grid-template-columns:repeat(2,1fr);
+        grid-template-columns:1fr;
 
     }
 
@@ -1161,6 +1178,8 @@
     .video-generation-selector{
 
         padding:20px;
+        max-height: calc(100vh - 30px);
+        max-height: calc(100dvh - 30px);
 
     }
 
@@ -1577,4 +1596,40 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
+}
+
+.video-generation-selector-item {
+    position: relative;
+}
+.video-generation-video-preview {
+    display: block;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.video-generation-preview-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 12px 44px;
+    background: #171717;
+    color: #ddd;
+    font-size: 13px;
+}
+.video-generation-selector-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 10px;
+    background: rgba(0, 0, 0, .8);
+    color: #fff;
+    font-size: 13px;
+    pointer-events: none;
+}
+.video-generation-selector-item:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
